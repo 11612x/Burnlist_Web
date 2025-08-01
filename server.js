@@ -36,9 +36,15 @@ app.use('/api', async (req, res) => {
   }
 });
 
-// Serve static files from the dist directory with proper caching
+// Serve static files from the dist directory with cache busting for JS files
 app.use(express.static(path.join(__dirname, 'dist'), {
-  maxAge: '1h',
+  maxAge: (req, res) => {
+    // Cache JS files for shorter time to ensure updates
+    if (req.path.endsWith('.js')) {
+      return '1m'; // 1 minute for JS files
+    }
+    return '1h'; // 1 hour for other files
+  },
   etag: true,
   lastModified: true
 }));
