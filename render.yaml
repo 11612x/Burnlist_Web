@@ -1,13 +1,14 @@
 services:
-  # Frontend Web Service (instead of Static Site)
+  # Frontend Web Service
   - type: web
     name: burnlist-frontend
     env: node
     buildCommand: npm install && npm run build
-    startCommand: node server.js
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
+    healthCheckPath: /
 
   # Backend API Service
   - type: web
@@ -20,3 +21,4 @@ services:
         value: production
       - key: FINVIZ_API_TOKEN
         sync: false
+    healthCheckPath: /api/health

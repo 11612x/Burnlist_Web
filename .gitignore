@@ -7,7 +7,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Build outputs
-dist/
+# dist/  # Commented out for Render.com deployment
 build/
 
 # Environment variables
