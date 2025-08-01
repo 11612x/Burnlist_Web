@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchManager } from '@data/fetchManager';
+import { fetchManager } from '@data/twelvedataFetchManager';
 
 const CRT_GREEN = 'rgb(140,185,162)';
 

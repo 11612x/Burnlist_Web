@@ -1,19 +1,26 @@
-import { fetchQuote } from '@data/finhubAdapter';
+import { fetchQuote, fetchBatchQuotes } from '@data/twelvedataAdapter';
 import normalizeTicker from '@data/normalizeTicker';
+import { logger } from '../utils/logger';
 
 // Merge historical data arrays, removing duplicates and sorting by timestamp
 function mergeHistoricalData(existingData, newData) {
-  // Create a map of existing data by full timestamp for quick lookup
+  // Create a map of existing data by full timestamp for more granular tracking
   const existingMap = new Map();
   existingData.forEach(point => {
-    const key = point.timestamp; // Use full timestamp, not just date
-    existingMap.set(key, point);
+    // Use full timestamp for more precise tracking
+    const timestampKey = point.timestamp;
+    existingMap.set(timestampKey, point);
   });
   
-  // Add new data, overwriting existing entries with same timestamp
+  // Add new data, keeping the most recent entry for each timestamp
   newData.forEach(point => {
-    const key = point.timestamp; // Use full timestamp, not just date
-    existingMap.set(key, point);
+    const timestampKey = point.timestamp;
+    const existingPoint = existingMap.get(timestampKey);
+    
+    // Keep the most recent point for each timestamp (should be the same timestamp)
+    if (!existingPoint || new Date(point.timestamp) >= new Date(existingPoint.timestamp)) {
+      existingMap.set(timestampKey, point);
+    }
   });
   
   // Convert back to array and sort by timestamp
@@ -21,9 +28,10 @@ function mergeHistoricalData(existingData, newData) {
     new Date(a.timestamp) - new Date(b.timestamp)
   );
   
-  console.log(`🔍 MERGE DEBUG: Merged ${existingData.length} existing + ${newData.length} new = ${merged.length} total data points`);
+  logger.log(`🔍 MERGE DEBUG: Merged ${existingData.length} existing + ${newData.length} new = ${merged.length} total data points`);
   if (merged.length > 0) {
-    console.log(`🔍 MERGE DEBUG: First timestamp: ${merged[0].timestamp}, Last timestamp: ${merged[merged.length - 1].timestamp}`);
+    logger.log(`🔍 MERGE DEBUG: First timestamp: ${merged[0].timestamp}, Last timestamp: ${merged[merged.length - 1].timestamp}`);
+    logger.log(`🔍 MERGE DEBUG: Data points over time:`, merged.map(p => `${new Date(p.timestamp).toLocaleString()} - $${p.price}`));
   }
   
   return merged;
@@ -48,16 +56,27 @@ function resetGlobalRequestCounter() {
   }
 }
 
-// Always allow requests (no rate limiting)
+// Rate limiting: Allow max 55 requests per minute (Twelve Data API limit)
 function canMakeRequest() {
-  return true;
+  const now = Date.now();
+  const timeSinceLastReset = now - lastResetTime;
+  
+  // Reset counter every minute
+  if (timeSinceLastReset >= 60000) {
+    globalRequestCount = 0;
+    lastResetTime = now;
+    return true;
+  }
+  
+  // Allow max 55 requests per minute (Twelve Data API limit)
+  return globalRequestCount < 55;
 }
 
 // Increment global request counter (for logging only)
 function incrementGlobalRequestCounter() {
   resetGlobalRequestCounter();
   globalRequestCount++;
-  console.log(`📊 Global API Request #${globalRequestCount} (unlimited)`);
+  logger.log(`📊 Global API Request #${globalRequestCount} (rate limited: ${globalRequestCount}/55 per minute)`);
 }
 
 // Get or initialize watchlist request counter
@@ -72,28 +91,28 @@ function getWatchlistRequestCounter(slug) {
 function incrementWatchlistRequestCounter(slug) {
   const counter = getWatchlistRequestCounter(slug);
   counter.count++;
-  console.log(`📊 Watchlist ${slug} API Request #${counter.count}`);
+  logger.log(`📊 Watchlist ${slug} API Request #${counter.count}`);
 }
 
-// Utility: Check if NYSE is open (Mon-Fri, 9:30am-4:00pm ET)
+// Utility: Check if extended trading hours are active (Mon-Fri, 4:00am-8:00pm ET)
 function isMarketOpen() {
   const now = new Date();
-  // Get NY time
+  // Get NY time (works regardless of user's timezone)
   const nyTime = new Date(
     now.toLocaleString('en-US', { timeZone: 'America/New_York' })
   );
   const day = nyTime.getDay(); // 0 = Sunday, 6 = Saturday
   const hours = nyTime.getHours();
-  const minutes = nyTime.getMinutes();
-  // Market open: Mon-Fri, 9:30am-4:00pm
-  if (day === 0 || day === 6) return false;
-  if (hours < 9 || (hours === 9 && minutes < 30)) return false;
-  if (hours > 16 || (hours === 16 && minutes > 0)) return false;
+  // Extended trading hours: Mon-Fri, 4:00am-8:00pm ET
+  // Includes pre-market (4am-9:30am), regular (9:30am-4pm), after-hours (4pm-8pm)
+  if (day === 0 || day === 6) return false; // No weekend trading
+  if (hours < 4) return false;  // Before 4:00 AM ET
+  if (hours >= 20) return false; // After 8:00 PM ET (>= 20:00)
   return true;
 }
 
 // Split tickers into batches
-function splitIntoBatches(tickers, batchSize = 100) {
+function splitIntoBatches(tickers, batchSize = 5) {
   const batches = [];
   for (let i = 0; i < tickers.length; i += batchSize) {
     batches.push(tickers.slice(i, i + batchSize));
@@ -173,12 +192,17 @@ export class FetchManager {
    * Start a new fetch or resume a paused one
    */
   async startFetch(slug, items, updateCallback, isManual = false, bypassMarketClosed = false, timeframe = 'D') {
-    console.log(`🚀 Starting fetch for ${slug} with ${items.length} items (manual: ${isManual}, timeframe: ${timeframe})`);
+    logger.info(`🚀 Starting fetch for ${slug} with ${items.length} items (manual: ${isManual}, timeframe: ${timeframe})`);
     
-    // Check if market is closed (unless bypassed)
-    if (!bypassMarketClosed && !isMarketOpen()) {
-      console.log(`⏰ Market is closed. Skipping fetch for ${slug}`);
-      return { success: false, message: 'Market is closed' };
+    // Check if market is closed for automatic fetches only
+    if (!isManual && !bypassMarketClosed && !isMarketOpen()) {
+      logger.log(`⏰ Market is closed. Skipping automatic fetch for ${slug} (manual fetches allowed anytime)`);
+      return { success: false, message: 'Market is closed - automatic fetches paused' };
+    }
+    
+    // Manual fetches are always allowed (add ticker, edit buy date, click header)
+    if (isManual) {
+      logger.log(`✅ Manual fetch allowed for ${slug} (bypassing market hours check)`);
     }
 
     // Cancel any existing fetch for this slug
@@ -197,7 +221,7 @@ export class FetchManager {
       const result = await this._executeFetch(slug, items, updateCallback, 0, timeframe);
       return result;
     } catch (error) {
-      console.error(`❌ Fetch failed for ${slug}:`, error);
+      logger.error(`❌ Fetch failed for ${slug}:`, error);
       return { success: false, message: error.message };
     }
   }
@@ -226,7 +250,7 @@ export class FetchManager {
         fetch.currentBatch = i;
         fetch.totalBatches = batches.length;
 
-        console.log(`📦 Processing batch ${i + 1}/${batches.length} for ${slug}`);
+        logger.log(`📦 Processing batch ${i + 1}/${batches.length} for ${slug}`);
 
         // Process this batch
         const batchResult = await this._processBatch(batches[i], updatedItems, abortController, slug, timeframe);
@@ -243,15 +267,15 @@ export class FetchManager {
           updateCallback(updatedItems, progress);
         }
 
-        // Small delay between batches to be nice to the API
+        // Rate limiting: Wait 1 second between batches to respect API limits
         if (i < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
 
       // Mark fetch as complete
       fetch.status = 'completed';
-      console.log(`✅ Fetch completed for ${slug}`);
+      logger.info(`✅ Fetch completed for ${slug}`);
 
       return { success: true, message: null };
     } catch (error) {
@@ -264,7 +288,7 @@ export class FetchManager {
    * Process a single batch of tickers
    */
   async _processBatch(batch, allItems, abortController, slug, timeframe) {
-    console.log(`🔄 Processing batch of ${batch.length} items`);
+    logger.log(`🔄 Processing batch of ${batch.length} items`);
     
     // Initialize updatedItems with a copy of allItems
     const updatedItems = [...allItems];
@@ -273,28 +297,43 @@ export class FetchManager {
       const item = batch[i];
       
       if (abortController.signal.aborted) {
-        console.log('🛑 Batch processing aborted');
+        logger.log('🛑 Batch processing aborted');
         break;
       }
 
       try {
-        console.log(`📊 Processing item ${i + 1}/${batch.length}: ${item.symbol}`);
+        logger.log(`📊 Processing item ${i + 1}/${batch.length}: ${item.symbol}`);
+        
+        // Rate limiting: Check if we can make a request
+        if (!canMakeRequest()) {
+          logger.warn(`⚠️ Rate limit reached, waiting 60 seconds before next request...`);
+          await new Promise(resolve => setTimeout(resolve, 60000)); // Wait full minute
+        }
         
         // Add delay between requests to prevent rate limiting
         if (i > 0) {
-          console.log(`⏳ Waiting 5 seconds before next request...`);
-          await new Promise(resolve => setTimeout(resolve, 5000));
+          logger.log(`⏳ Waiting 3 seconds before next request...`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
         }
         
         const finvizTimeframe = {
           'D': 'd', 'W': 'w', 'M': 'm', 'Y': 'y', 'YTD': 'ytd', 'MAX': 'max'
         }[timeframe] || 'd';
         
+        // Increment request counter before making the request
+        incrementGlobalRequestCounter();
+        
         const newTicker = await fetchQuote(item.symbol, finvizTimeframe); // Pass timeframe
+        
+        // Check for rate limit errors
+        if (!newTicker && globalRequestCount >= 50) {
+          logger.warn(`⚠️ Rate limit approaching (${globalRequestCount}/55), stopping batch processing`);
+          break; // Stop processing this batch
+        }
         
         // Validate that we got a proper ticker object
         if (!newTicker || typeof newTicker !== 'object' || !newTicker.historicalData || newTicker.historicalData.length === 0) {
-          console.warn(`⚠️ Skipping ${item.symbol} due to invalid ticker object:`, newTicker);
+          logger.debug(`⚠️ Skipping ${item.symbol} due to invalid ticker object:`, newTicker);
           continue;
         }
 
@@ -302,7 +341,7 @@ export class FetchManager {
         const newHistoricalData = newTicker.historicalData;
         
         if (!newHistoricalData || newHistoricalData.length === 0) {
-          console.warn(`⚠️ Skipping ${item.symbol} due to no historical data`);
+          logger.warn(`⚠️ Skipping ${item.symbol} due to no historical data`);
           continue;
         }
 
@@ -310,7 +349,10 @@ export class FetchManager {
         const existingHistoricalData = item.historicalData || [];
         const mergedHistoricalData = mergeHistoricalData(existingHistoricalData, newHistoricalData);
         
-        console.log(`📊 ${item.symbol}: Merged ${existingHistoricalData.length} existing + ${newHistoricalData.length} new = ${mergedHistoricalData.length} total data points`);
+        logger.log(`📊 ${item.symbol}: Merged ${existingHistoricalData.length} existing + ${newHistoricalData.length} new = ${mergedHistoricalData.length} total data points`);
+        logger.log(`📈 ${item.symbol}: Historical data timeline:`, mergedHistoricalData.map(p => 
+          `${new Date(p.timestamp).toLocaleString()} - $${p.price}`
+        ));
 
         // Filter out any data points before the buy date
         const buyDate = new Date(item.buyDate);
@@ -334,7 +376,7 @@ export class FetchManager {
           buyPrice: item.buyPrice, // Keep original buy price
           buyDate: item.buyDate,   // Keep original buy date
           type: item.type,
-          isMock: item.isMock,
+  
           addedAt: item.addedAt,
           currentPrice: currentPrice, // Add current market price
         };
@@ -345,9 +387,9 @@ export class FetchManager {
           updatedItems[itemIndex] = normalized;
         }
 
-        // No delay between requests (unlimited)
+        // Rate limiting applied above
       } catch (err) {
-        console.error(`❌ Error refreshing ${item.symbol}:`, err);
+        logger.error(`❌ Error refreshing ${item.symbol}:`, err);
       }
     }
 
@@ -391,5 +433,5 @@ export class FetchManager {
   }
 }
 
-// Export a singleton instance
-export const fetchManager = new FetchManager(); 
+// Export a singleton instance (DISABLED - using twelvedataFetchManager instead)
+// export const fetchManager = new FetchManager(); 

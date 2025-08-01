@@ -29,23 +29,11 @@ const NotificationBanner = ({ message, type = 'info', onClose }) => {
         boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
         letterSpacing: '0.5px',
         textTransform: 'uppercase',
-        minHeight: '20px',
+        minHeight: '44px', // Touch-friendly
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         backdropFilter: 'blur(4px)',
-        minHeight: '44px', // Touch-friendly
-        '@media (max-width: 768px)': {
-          padding: '10px 12px',
-          fontSize: 13,
-          letterSpacing: '0.3px',
-        },
-        '@media (max-width: 480px)': {
-          padding: '8px 10px',
-          fontSize: 12,
-          letterSpacing: '0.2px',
-          minHeight: '40px',
-        }
       }}
       onClick={onClose}
       aria-label={onClose ? 'Dismiss notification' : undefined}

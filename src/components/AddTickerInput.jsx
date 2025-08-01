@@ -125,7 +125,7 @@ const AddTickerInput = ({ bulkSymbols, setBulkSymbols, handleBulkAdd, buyDate, s
         console.log(`📞 Calling createTicker for ${symbol} with price=${price}, date=${date}`);
         const item = await createTicker(
           symbol,
-          symbol.startsWith("#") ? "mock" : "real",
+          "real",
           price,
           date
         );

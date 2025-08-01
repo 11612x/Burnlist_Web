@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { fetchManager } from '@data/fetchManager';
+import { fetchManager } from '@data/twelvedataFetchManager';
 import NotificationBanner from '@components/NotificationBanner';
 import { useThemeColor } from '../ThemeContext';
 import backButton from '../assets/backbutton.png';
 import { useTheme } from '../ThemeContext';
+import { logger } from '../utils/logger';
 
 const CRT_GREEN = 'rgb(140,185,162)';
 
@@ -16,43 +17,22 @@ const WatchlistHeader = ({ name, averageReturn, selected, setWatchlists, notific
   const orange = useThemeColor('#FFA500');
   const gray = useThemeColor('#888');
   // Debug: Log the precomputed average return passed as prop
-  console.log("📊 WatchlistHeader received averageReturn:", averageReturn);
+  logger.debug("📊 WatchlistHeader received averageReturn:", averageReturn);
   const returnPercent = Number.isFinite(averageReturn) ? averageReturn : null;
   if (returnPercent === null) {
-    console.warn("⚠️ averageReturn is invalid:", averageReturn);
+    logger.debug("⚠️ averageReturn is invalid:", averageReturn);
   }
 
   // Use props for name and realStockCount
   const realStockCount = propRealStockCount || 0;
   const { slug } = useParams();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [countdown, setCountdown] = useState(null);
+
   const [fetchProgress, setFetchProgress] = useState(null);
   const [tempNotification, setTempNotification] = useState("");
   const [apiStatus, setApiStatus] = useState(null);
 
-  // Countdown timer for next auto-refresh (30 minutes)
-  useEffect(() => {
-    const updateCountdown = () => {
-      const now = new Date();
-      const lastRefresh = localStorage.getItem(`burnlist_last_refresh_${slug}`);
-      const lastRefreshTime = lastRefresh ? new Date(lastRefresh) : new Date(now.getTime() - 30 * 60 * 1000);
-      const nextRefresh = new Date(lastRefreshTime.getTime() + 30 * 60 * 1000);
-      const timeUntilNext = nextRefresh.getTime() - now.getTime();
-      
-      if (timeUntilNext > 0) {
-        const minutes = Math.floor(timeUntilNext / (1000 * 60));
-        const seconds = Math.floor((timeUntilNext % (1000 * 60)) / 1000);
-        setCountdown(`${minutes}:${seconds.toString().padStart(2, '0')}`);
-      } else {
-        setCountdown(null);
-      }
-    };
 
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
-  }, [slug]);
 
   // Track API request status for this specific watchlist
   useEffect(() => {
@@ -138,7 +118,7 @@ const WatchlistHeader = ({ name, averageReturn, selected, setWatchlists, notific
     // Count real stocks in the watchlist
     if (name && Array.isArray(name.items)) {
       const realStocks = name.items.filter(item => 
-        item.type === 'real' && !item.isMock
+        item.type === 'real'
       );
       setRealStockCount(realStocks.length);
       console.log("📊 Real stocks count:", realStocks.length);
@@ -171,23 +151,10 @@ const WatchlistHeader = ({ name, averageReturn, selected, setWatchlists, notific
         backgroundColor: black,
         color: green,
         fontFamily: "'Courier New', Courier, monospace",
-        width: "100%",
-        '@media (max-width: 768px)': {
-          padding: "1rem 1.5rem",
-        },
-        '@media (max-width: 480px)': {
-          padding: "0.75rem 1rem",
-          flexDirection: "column",
-          alignItems: "flex-start",
-          gap: "8px",
-        }
+        width: "100%"
       }}>
         {/* Left: Back Home Button */}
-        <div style={{
-          '@media (max-width: 480px)': {
-            alignSelf: 'flex-start',
-          }
-        }}>
+        <div style={{}}>
           <a href="/" style={{
             display: 'flex',
             alignItems: 'center',
@@ -204,11 +171,7 @@ const WatchlistHeader = ({ name, averageReturn, selected, setWatchlists, notific
               style={{ 
                 width: 22, 
                 height: 22, 
-                filter: isInverted ? 'invert(1)' : 'none',
-                '@media (max-width: 480px)': {
-                  width: 20,
-                  height: 20,
-                }
+                filter: isInverted ? 'invert(1)' : 'none'
               }} 
             />
           </a>
@@ -217,17 +180,7 @@ const WatchlistHeader = ({ name, averageReturn, selected, setWatchlists, notific
         <div style={{ 
           textAlign: "right", 
           paddingRight: "3.5rem", 
-          maxWidth: "60%",
-          '@media (max-width: 768px)': {
-            paddingRight: "2rem",
-            maxWidth: "70%",
-          },
-          '@media (max-width: 480px)': {
-            textAlign: "left",
-            paddingRight: 0,
-            maxWidth: "100%",
-            width: "100%",
-          }
+          maxWidth: "60%"
         }}>
           <h1
             style={{
@@ -242,17 +195,7 @@ const WatchlistHeader = ({ name, averageReturn, selected, setWatchlists, notific
               transition: 'color 0.2s',
               minHeight: '44px', // Touch-friendly
               display: 'flex',
-              alignItems: 'center',
-              '@media (max-width: 768px)': {
-                fontSize: "1.5rem",
-                marginTop: '6px',
-              },
-              '@media (max-width: 480px)': {
-                fontSize: "1.25rem",
-                whiteSpace: "normal",
-                wordBreak: "break-word",
-                marginTop: '4px',
-              }
+              alignItems: 'center'
             }}
             onClick={handleRefresh}
             title={isRefreshing ? 'Cancel refresh' : 'Refresh watchlist'}
@@ -272,36 +215,22 @@ const WatchlistHeader = ({ name, averageReturn, selected, setWatchlists, notific
                 marginTop: "0.5rem", 
                 fontSize: "0.8rem", 
                 color: apiStatus.current > 0 ? orange : gray,
-                cursor: apiStatus.current > 0 ? "help" : "default",
-                '@media (max-width: 480px)': {
-                  fontSize: "0.7rem",
-                  marginTop: "0.25rem",
-                }
+                cursor: apiStatus.current > 0 ? "help" : "default"
               }}
               title={apiStatus.current > 0 ? "API requests in progress - waiting 1 minute between batches" : ""}
             >
               {apiStatus.current}/{realStockCount} ({Math.round((apiStatus.current / realStockCount) * 100)}%)
             </div>
           )}
-          {/* Countdown timer (green) and progress indicator (red) */}
+          {/* Progress indicator */}
           <div style={{ 
             marginTop: "0.5rem", 
-            fontSize: "0.8rem",
-            '@media (max-width: 480px)': {
-              fontSize: "0.7rem",
-              marginTop: "0.25rem",
-            }
+            fontSize: "0.8rem"
           }}>
-            {fetchProgress && typeof fetchProgress.tickersFetched === 'number' && typeof fetchProgress.totalTickers === 'number' ? (
+            {fetchProgress && typeof fetchProgress.tickersFetched === 'number' && typeof fetchProgress.totalTickers === 'number' && (
               <span style={{ color: red, fontWeight: "bold" }}>
                 {fetchProgress.tickersFetched}/{fetchProgress.totalTickers}
               </span>
-            ) : (
-              countdown && (
-                <span style={{ color: green }}>
-                  {countdown}
-                </span>
-              )
             )}
           </div>
         </div>

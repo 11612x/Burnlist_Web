@@ -8,6 +8,7 @@ import yellowflag from '../assets/yellowflag.png';
 import redflag from '../assets/redflag.png';
 import backbutton from '../assets/backbutton.png';
 import useNotification from '../hooks/useNotification';
+import { logger } from '../utils/logger';
 import { getCachedExchange } from '../utils/exchangeDetector';
 
 const CRT_GREEN = 'rgb(140,185,162)';
@@ -28,7 +29,7 @@ const TradeJournal = () => {
       try {
         setTrades(JSON.parse(savedTrades));
       } catch (error) {
-        console.error("Error loading trades:", error);
+        logger.error("Error loading trades:", error);
       }
     }
   }, []);
@@ -69,7 +70,7 @@ const TradeJournal = () => {
       const chartUrl = `https://www.tradingview.com/chart/i0seCgVv/?symbol=${encodedSymbol}`;
       window.open(chartUrl, '_blank');
     } catch (error) {
-      console.warn(`⚠️ Error opening chart for ${symbol}:`, error);
+      logger.warn(`⚠️ Error opening chart for ${symbol}:`, error);
       // Fallback to NASDAQ if there's an error
       const encodedSymbol = encodeURIComponent(`NASDAQ:${symbol.toUpperCase()}`);
       const chartUrl = `https://www.tradingview.com/chart/i0seCgVv/?symbol=${encodedSymbol}`;

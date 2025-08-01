@@ -6,6 +6,7 @@ import CustomButton from '@components/CustomButton';
 import { useTheme, useThemeColor } from '../ThemeContext';
 import { formatDateEuropean } from '../utils/dateUtils';
 import useNotification from '../hooks/useNotification';
+import { logger } from '../utils/logger';
 
 const CRT_GREEN = 'rgb(140,185,162)';
 
@@ -80,7 +81,7 @@ const UniverseHomePage = () => {
     const keyToDelete = Object.keys(universes).find(key => universes[key].id === id);
     
     if (!keyToDelete) {
-      console.log('🗑️ Could not find universe with id:', id);
+      logger.log('🗑️ Could not find universe with id:', id);
       return;
     }
     
@@ -88,9 +89,9 @@ const UniverseHomePage = () => {
     setUniverses(remaining);
     localStorage.setItem("burnlist_universes", JSON.stringify(remaining));
     if (deleted) {
-      console.log('🗑️ Deleted universe:', deleted.name);
+      logger.log('🗑️ Deleted universe:', deleted.name);
     } else {
-      console.log('🗑️ Deleted universe with id:', id);
+      logger.log('🗑️ Deleted universe with id:', id);
     }
   };
 
@@ -284,7 +285,7 @@ const UniverseHomePage = () => {
         <CustomButton
           onClick={() => {
             setEditMode(!editMode);
-            console.log('🛠️ Edit mode:', !editMode);
+            logger.log('🛠️ Edit mode:', !editMode);
           }}
           style={{
             backgroundColor: editMode ? green : black,

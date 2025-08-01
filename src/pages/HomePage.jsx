@@ -3,11 +3,12 @@ import WatchlistChart from '@components/WatchlistChart';
 import { randomNames } from '@data/randomNames';
 import { v4 as uuidv4 } from 'uuid';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { generateFixedMockWatchlist } from '@data/mockTickerGenerator';
-import { fetchManager } from '@data/fetchManager';
+
+import { fetchManager } from '@data/twelvedataFetchManager';
 import NotificationBanner from '@components/NotificationBanner';
 import CustomButton from '@components/CustomButton';
 import logo from '../assets/logo.png';
+import { logger } from '../utils/logger';
 import logoblack from '../assets/logoblack.png';
 import { useTheme, useThemeColor } from '../ThemeContext';
 import useNotification from '../hooks/useNotification';
@@ -81,6 +82,41 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
     });
   };
 
+  // Helper function to create detailed tooltip content for watchlist cards
+  const createWatchlistTooltip = (type, data) => {
+    const CRT_GREEN = 'rgb(140,185,162)';
+    const red = '#e31507';
+    
+    switch (type) {
+      case 'name':
+        return `Watchlist: ${data.name}\nStocks: ${data.stockCount}\nCreated: ${data.createdAt || 'Unknown'}`;
+      case 'return':
+        const returnColor = data.return >= 0 ? CRT_GREEN : red;
+        const prefix = data.return >= 0 ? '+' : '';
+        return `Return: ${prefix}${data.return.toFixed(2)}%\nTimeframe: ${data.timeframe || 'MAX'}\nPerformance`;
+      case 'risk':
+        return `Risk Level: ${data.risk}\nBest: ${data.bestPerformer || 'N/A'}\nWorst: ${data.worstPerformer || 'N/A'}`;
+      case 'lastUpdate':
+        return `Last Update: ${data.lastUpdate}\nData Age: ${data.age || 'Unknown'}\nRefresh Status`;
+      default:
+        return '';
+    }
+  };
+
+  // Get formatted creation date
+  const getFormattedCreationDate = (createdAt) => {
+    if (!createdAt) return 'Unknown';
+    try {
+      const date = new Date(createdAt);
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = String(date.getFullYear()).slice(-2);
+      return `${day}-${month}-${year}`;
+    } catch {
+      return 'Unknown';
+    }
+  };
+
   // Auto-refresh logic using fetch manager
   // Remove auto-fetching from homepage - only manual refresh
   useEffect(() => {
@@ -110,7 +146,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
       slug,
       items: [],
       reason: '',
-      createdAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
     };
     const updated = { ...watchlists, [newList.id]: newList };
     setWatchlists(updated);
@@ -123,7 +159,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
     const keyToDelete = Object.keys(watchlists).find(key => watchlists[key].id === id);
     
     if (!keyToDelete) {
-      console.log('🗑️ Could not find watchlist with id:', id);
+      logger.log('🗑️ Could not find watchlist with id:', id);
       return;
     }
     
@@ -131,9 +167,9 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
     setWatchlists(remaining);
     localStorage.setItem('burnlist_watchlists', JSON.stringify(remaining));
     if (deleted) {
-      console.log('🗑️ Deleted watchlist:', deleted.name);
+      logger.log('🗑️ Deleted watchlist:', deleted.name);
     } else {
-      console.log('🗑️ Deleted watchlist with id:', id);
+      logger.log('🗑️ Deleted watchlist with id:', id);
     }
   };
 
@@ -149,11 +185,6 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
       const updated = { ...prev };
       if (updated[id]) {
         updated[id] = { ...updated[id], name: newName, slug: slugify(newName) };
-        // If the new name starts with '!', inject mock data and overwrite items
-        if (typeof newName === 'string' && newName.startsWith('!')) {
-          const mock = generateFixedMockWatchlist({ numTickers: 4, days: 130 });
-          updated[id].items = mock.items;
-        }
       }
       localStorage.setItem('burnlist_watchlists', JSON.stringify(updated));
       return updated;
@@ -189,7 +220,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
               allLocalStorageData[key] = value;
             }
           } catch (error) {
-            console.warn(`Could not export localStorage key: ${key}`, error);
+            logger.warn(`Could not export localStorage key: ${key}`, error);
           }
         }
       }
@@ -213,7 +244,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
       
       setNotification(`✅ All localStorage data exported (${Object.keys(allLocalStorageData).length} keys)`, 'success');
     } catch (error) {
-      console.error('Export error:', error);
+      logger.error('Export error:', error);
       setNotification('❌ Export failed', 'error');
     }
   };
@@ -244,7 +275,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
               }
               importedCount++;
             } catch (error) {
-              console.warn(`Could not import localStorage key: ${key}`, error);
+              logger.warn(`Could not import localStorage key: ${key}`, error);
             }
           });
           
@@ -256,7 +287,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
                 : localStorageData.burnlist_watchlists;
               setWatchlists(watchlistsData);
             } catch (error) {
-              console.warn('Could not parse watchlists data', error);
+              logger.warn('Could not parse watchlists data', error);
             }
           }
           
@@ -268,7 +299,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
                 : localStorageData.burnlist_fetch_count;
               setFetchCount(fetchCountData);
             } catch (error) {
-              console.warn('Could not parse fetch count data', error);
+              logger.warn('Could not parse fetch count data', error);
             }
           }
           
@@ -297,7 +328,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
           setNotification('✅ Legacy data imported successfully', 'success');
         }
       } catch (error) {
-        console.error('Import error:', error);
+        logger.error('Import error:', error);
         setNotification('❌ Import failed: Invalid file format', 'error');
       }
     };
@@ -345,10 +376,6 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
       const updated = { ...prev };
       if (updated[id]) {
         updated[id] = { ...updated[id], name: newName, slug: slugify(newName) };
-        if (typeof newName === 'string' && newName.startsWith('!')) {
-          const mock = generateFixedMockWatchlist({ numTickers: 4, days: 130 });
-          updated[id].items = mock.items;
-        }
       }
       localStorage.setItem('burnlist_watchlists', JSON.stringify(updated));
       return updated;
@@ -387,16 +414,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
     }}>
       {/* Main Content */}
       <div style={{
-        padding: '32px',
-        /* Mobile responsive padding */
-        '@media (max-width: 768px)': {
-          padding: '16px',
-          paddingBottom: '80px', // Account for mobile navigation
-        },
-        '@media (max-width: 480px)': {
-          padding: '12px',
-          paddingBottom: '80px', // Account for mobile navigation
-        }
+        padding: '32px'
       }}>
         {/* Header Section */}
       <div style={{ 
@@ -404,21 +422,14 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
         justifyContent: 'space-between', 
         marginBottom: 24,
         flexWrap: 'wrap',
-        gap: '12px',
-        '@media (max-width: 768px)': {
-          flexDirection: 'column',
-          alignItems: 'flex-start',
-          marginBottom: 16,
-        }
+        gap: '12px'
       }}>
         <div style={{ 
           display: 'flex', 
           alignItems: 'center', 
-          gap: 12,
-          '@media (max-width: 480px)': {
-            gap: 8,
-          }
-        }}>
+          gap: 12
+        }}
+        title="Test tooltip - hover to see if tooltips work">
           <button
             onClick={toggleTheme}
             style={{
@@ -439,12 +450,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
                 width: 40, 
                 height: 40, 
                 marginRight: 10, 
-                transition: 'filter 0.3s',
-                '@media (max-width: 480px)': {
-                  width: 32,
-                  height: 32,
-                  marginRight: 8,
-                }
+                transition: 'filter 0.3s'
               }} 
             />
           </button>
@@ -452,31 +458,20 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
             fontSize: '170%', 
             lineHeight: '40px', 
             display: 'inline-block', 
-            color: green,
-            '@media (max-width: 768px)': {
-              fontSize: '140%',
-              lineHeight: '32px',
-            },
-            '@media (max-width: 480px)': {
-              fontSize: '120%',
-              lineHeight: '28px',
-            }
+            color: green
           }}>BURNLIST v1.1</strong>
         </div>
         <div style={{ 
           display: 'flex', 
           alignItems: 'center', 
-          gap: 10,
-          '@media (max-width: 768px)': {
-            alignSelf: 'flex-end',
-          }
+          gap: 10
         }}>
           <span style={{ color: red, fontWeight: 'bold', fontSize: 12 }}>{uniqueRealTickers.length}</span>
           <span style={{ color: green, fontWeight: 'bold', fontSize: 12 }}>{fetchCount}</span>
           <span 
             onClick={() => {
               const data = JSON.parse(localStorage.getItem('burnlist_watchlists'));
-              console.log('🧪 Current localStorage burnlist_watchlists:', data);
+              logger.log('🧪 Current localStorage burnlist_watchlists:', data);
             }}
             style={{ cursor: 'pointer', color: green }}
           >
@@ -583,19 +578,12 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
           zIndex: 10001, 
           display: 'flex', 
           justifyContent: 'center', 
-          pointerEvents: 'none',
-          '@media (max-width: 480px)': {
-            top: 12,
-          }
+          pointerEvents: 'none'
         }}>
           <div style={{ 
             minWidth: 320, 
             maxWidth: 480, 
-            pointerEvents: 'auto',
-            '@media (max-width: 480px)': {
-              minWidth: '90vw',
-              maxWidth: '90vw',
-            }
+            pointerEvents: 'auto'
           }}>
             <NotificationBanner
               message={notification}
@@ -631,19 +619,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
         columnGap: '20px',
         margin: '70px 0 1px 0',
         justifyContent: 'center',
-        alignItems: 'start',
-        '@media (max-width: 768px)': {
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 200px))',
-          rowGap: '16px',
-          columnGap: '16px',
-          margin: '40px 0 1px 0',
-        },
-        '@media (max-width: 480px)': {
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 180px))',
-          rowGap: '12px',
-          columnGap: '12px',
-          margin: '20px 0 1px 0',
-        }
+        alignItems: 'start'
       }}>
       {sortedWatchlists.map((item, idx, arr) => {
         const tickers = item.items || [];
@@ -715,15 +691,9 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
                 justifyContent: 'flex-start',
                 position: 'relative',
                 boxSizing: 'border-box',
-                overflow: 'hidden',
-                '@media (max-width: 768px)': {
-                  height: editMode ? 120 : (view === 'graph' ? 160 : 90),
-                  padding: '6px 4px',
-                },
-                '@media (max-width: 480px)': {
-                  height: editMode ? 110 : (view === 'graph' ? 140 : 70),
-                  padding: '4px 3px',
-                }
+                overflow: 'hidden'
+                
+                
               }}>
             {/* Name (editable) */}
             {editMode ? (
@@ -750,17 +720,9 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  minHeight: '24px',
-                  '@media (max-width: 768px)': {
-                    fontSize: 14,
-                    padding: '1px 3px',
-                    minHeight: '20px',
-                  },
-                  '@media (max-width: 480px)': {
-                    fontSize: 12,
-                    padding: '1px 2px',
-                    minHeight: '18px',
-                  }
+                  minHeight: '24px'
+                  
+                  
                 }}
               />
             ) : (
@@ -772,15 +734,13 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
                 overflow: 'hidden', 
                 textOverflow: 'ellipsis', 
                 whiteSpace: 'nowrap',
-                '@media (max-width: 768px)': {
-                  fontSize: 14,
-                  marginBottom: 2,
-                },
-                '@media (max-width: 480px)': {
-                  fontSize: 12,
-                  marginBottom: 1,
-                }
-              }}>
+                cursor: 'pointer'
+                
+                
+              }}
+              title={`Watchlist: ${item.name || `PORTFOLIO ${idx + 1}`} | Stocks: ${tickers.length} | Created: ${getFormattedCreationDate(item.createdAt)}`}
+              onClick={() => navigate(`/burn/${item.slug}`)}
+              >
                 {item.name || `PORTFOLIO ${idx + 1}`}
               </div>
             )}
@@ -799,18 +759,11 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
                   fontWeight: 'bold',
                   fontFamily: 'Courier New',
                   cursor: 'pointer',
-                  minHeight: '16px',
-                  '@media (max-width: 768px)': {
-                    fontSize: 8,
-                    padding: '1px 3px',
-                    minHeight: '14px',
-                  },
-                  '@media (max-width: 480px)': {
-                    fontSize: 7,
-                    padding: '1px 2px',
-                    minHeight: '12px',
-                  }
+                  minHeight: '16px'
+                  
+                  
                 }}
+                title="Delete this watchlist"
               >
                 DELETE
               </button>
@@ -832,17 +785,9 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  minHeight: '18px',
-                  '@media (max-width: 768px)': {
-                    fontSize: 10,
-                    padding: '1px 2px',
-                    minHeight: '16px',
-                  },
-                  '@media (max-width: 480px)': {
-                    fontSize: 9,
-                    padding: '1px 2px',
-                    minHeight: '14px',
-                  }
+                  minHeight: '18px'
+                  
+                  
                 }}
                 placeholder="Reason..."
               />
@@ -854,15 +799,9 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
                   marginBottom: 4, 
                   overflow: 'hidden', 
                   textOverflow: 'ellipsis', 
-                  whiteSpace: 'nowrap',
-                  '@media (max-width: 768px)': {
-                    fontSize: 11,
-                    marginBottom: 2,
-                  },
-                  '@media (max-width: 480px)': {
-                    fontSize: 9,
-                    marginBottom: 1,
-                  }
+                  whiteSpace: 'nowrap'
+                  
+                  
                 }}>
                   {item.reason || 'N/A'}
                 </div>
@@ -873,15 +812,11 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
               fontSize: 13, 
               color: green, 
               marginBottom: 2,
-              '@media (max-width: 768px)': {
-                fontSize: 10,
-                marginBottom: 1,
-              },
-              '@media (max-width: 480px)': {
-                fontSize: 8,
-                marginBottom: 1,
-              }
-            }}>
+              cursor: 'help'
+              
+              
+            }}
+            title={`Risk Level: ${riskIndicator} | Best: ${bestPerformer?.symbol || 'N/A'} | Worst: ${worstPerformer?.symbol || 'N/A'}`}>
               {tickers.length} stocks | Risk: {riskIndicator}
             </div>
             {/* Last update */}
@@ -889,15 +824,11 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
               fontSize: 11, 
               color: gray, 
               marginBottom: 2,
-              '@media (max-width: 768px)': {
-                fontSize: 9,
-                marginBottom: 1,
-              },
-              '@media (max-width: 480px)': {
-                fontSize: 7,
-                marginBottom: 1,
-              }
-            }}>
+              cursor: 'help'
+              
+              
+            }}
+            title={`Last Update: ${lastUpdate} | Data Age: ${lastUpdate}`}>
               {lastUpdate}
             </div>
             {/* Return percent in terminal view */}
@@ -905,17 +836,12 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
               <div style={{ 
                 fontSize: 19, 
                 color: isPositive ? green : red, 
-                fontWeight: 'bold', 
-                marginBottom: 2,
-                '@media (max-width: 768px)': {
-                  fontSize: 14,
-                  marginBottom: 1,
-                },
-                '@media (max-width: 480px)': {
-                  fontSize: 12,
-                  marginBottom: 1,
-                }
-              }}>
+                fontWeight: 'bold',
+                cursor: 'help'
+                
+                
+              }}
+              title={`Return: ${lastReturn >= 0 ? '+' : ''}${lastReturn.toFixed(2)}% | Timeframe: MAX`}>
                 {lastReturn >= 0 ? '+' : ''}{lastReturn.toFixed(2)}%
               </div>
             )}
@@ -927,15 +853,9 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
                   fontSize: 19, 
                   color: isPositive ? green : red, 
                   fontWeight: 'bold', 
-                  marginBottom: 2,
-                  '@media (max-width: 768px)': {
-                    fontSize: 14,
-                    marginBottom: 1,
-                  },
-                  '@media (max-width: 480px)': {
-                    fontSize: 12,
-                    marginBottom: 1,
-                  }
+                  marginBottom: 2
+                  
+                  
                 }}>
                   {lastReturn >= 0 ? '+' : ''}{lastReturn.toFixed(2)}%
                 </div>
@@ -951,17 +871,9 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
                   marginTop: 2,
                   display: 'flex',
                   justifyContent: 'flex-end',
-                  alignItems: 'flex-end',
-                  '@media (max-width: 768px)': {
-                    height: 60,
-                    maxWidth: 140,
-                    marginTop: 1,
-                  },
-                  '@media (max-width: 480px)': {
-                    height: 50,
-                    maxWidth: 120,
-                    marginTop: 1,
-                  }
+                  alignItems: 'flex-end'
+                  
+                  
                 }}>
                   <WatchlistChart 
                     portfolioReturnData={tickers.map(t => ({
@@ -1082,13 +994,13 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
         <button
           onClick={() => {
             setEditMode(!editMode);
-            console.log('🛠️ Edit mode:', !editMode);
+            logger.log('🛠️ Edit mode:', !editMode);
           }}
           className="action-button"
           style={{
             textTransform: 'lowercase',
             fontWeight: 400,
-            letterSpacing: 1,
+            letterSpacing: 1
           }}
         >
           {editMode ? 'done' : 'edit'}
@@ -1106,7 +1018,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
           style={{
             textTransform: 'lowercase',
             fontWeight: 400,
-            letterSpacing: 1,
+            letterSpacing: 1
           }}
         >
           import
@@ -1117,7 +1029,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
           style={{
             textTransform: 'lowercase',
             fontWeight: 400,
-            letterSpacing: 1,
+            letterSpacing: 1
           }}
         >
           export

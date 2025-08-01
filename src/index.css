@@ -46,6 +46,27 @@ button, input, select, textarea {
   }
 }
 
+/* Mobile table wrapper responsive styles */
+.mobile-table-wrapper {
+  width: 100%;
+  position: relative;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+
+@media (max-width: 768px) {
+  .mobile-table-wrapper {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .mobile-table-wrapper {
+    font-size: 10px;
+  }
+}
+
 /* Safe area handling for notched devices */
 @supports (padding: max(0px)) {
   .safe-area-top {
@@ -454,4 +475,13 @@ button, input, select, textarea {
   .mobile-padding-md { padding: 8px; }
   .mobile-padding-lg { padding: 16px; }
   .mobile-padding-xl { padding: 24px; }
+}
+
+/* Chart tooltip styles */
+.chartjs-tooltip {
+  background: black !important;
+  color: #0de309 !important;
+  border: 1px solid #0de309 !important;
+  font-family: 'Courier New', monospace !important;
+  z-index: 10000 !important;
 }

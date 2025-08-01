@@ -1,4 +1,5 @@
 import { fetchQuote } from '@data/finhubAdapter';
+import { logger } from '../utils/logger';
 import normalizeTicker from '@data/normalizeTicker';
 
 // Merge historical data arrays, removing duplicates and sorting by timestamp
@@ -38,11 +39,11 @@ export async function refreshWatchlistData(items, updateFn) {
 
       try {
         const newTicker = await fetchQuote(item.symbol);
-        console.log(`📡 Raw quote from API for ${item.symbol}:`, newTicker);
+        logger.log(`📡 Raw quote from API for ${item.symbol}:`, newTicker);
         
         // Validate that we got a proper ticker object
         if (!newTicker || typeof newTicker !== 'object' || !newTicker.historicalData || newTicker.historicalData.length === 0) {
-          console.warn(`⚠️ Skipping ${item.symbol} due to invalid ticker object:`, newTicker);
+          logger.debug(`⚠️ Skipping ${item.symbol} due to invalid ticker object:`, newTicker);
           return item;
         }
 
@@ -50,7 +51,7 @@ export async function refreshWatchlistData(items, updateFn) {
         const newHistoricalData = newTicker.historicalData;
         
         if (!newHistoricalData || newHistoricalData.length === 0) {
-          console.warn(`⚠️ Skipping ${item.symbol} due to no historical data`);
+          logger.warn(`⚠️ Skipping ${item.symbol} due to no historical data`);
           return item;
         }
 
@@ -58,7 +59,7 @@ export async function refreshWatchlistData(items, updateFn) {
         const existingHistoricalData = item.historicalData || [];
         const mergedHistoricalData = mergeHistoricalData(existingHistoricalData, newHistoricalData);
         
-        console.log(`📊 ${item.symbol}: Merged ${existingHistoricalData.length} existing + ${newHistoricalData.length} new = ${mergedHistoricalData.length} total data points`);
+        logger.log(`📊 ${item.symbol}: Merged ${existingHistoricalData.length} existing + ${newHistoricalData.length} new = ${mergedHistoricalData.length} total data points`);
 
         // Filter out any data points before the buy date
         const buyDate = new Date(item.buyDate);
@@ -77,13 +78,13 @@ export async function refreshWatchlistData(items, updateFn) {
           buyPrice: item.buyPrice,
           buyDate: item.buyDate,
           type: item.type,
-          isMock: item.isMock,
+  
           addedAt: item.addedAt,
         };
-        console.log(`✅ Final normalized item for ${item.symbol}:`, normalized);
+        logger.log(`✅ Final normalized item for ${item.symbol}:`, normalized);
         return normalized;
       } catch (err) {
-        console.error(`❌ Error refreshing ${item.symbol}:`, err);
+        logger.error(`❌ Error refreshing ${item.symbol}:`, err);
         return item;
       }
     })

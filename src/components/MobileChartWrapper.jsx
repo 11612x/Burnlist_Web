@@ -16,12 +16,6 @@ const MobileChartWrapper = ({ children, height = 400, style = {} }) => {
       position: 'relative',
       overflow: 'hidden',
       touchAction: 'pan-x pan-y', // Enable touch scrolling
-      '@media (max-width: 768px)': {
-        height: Math.min(height, 350),
-      },
-      '@media (max-width: 480px)': {
-        height: Math.min(height, 250),
-      },
       ...style
     }}>
       <div style={{

@@ -198,7 +198,7 @@ app.get('/api/twelvedata-quote', async (req, res) => {
 
 // Historical data endpoint for buy date changes
 app.get('/api/twelvedata-historical', async (req, res) => {
-  const { symbol, start_date, end_date, interval = '1h' } = req.query;
+  const { symbol, start_date, end_date, interval = '1h', outputsize } = req.query;
   
   if (!symbol) {
     return res.status(400).json({ error: 'Symbol parameter is required' });
@@ -219,9 +219,14 @@ app.get('/api/twelvedata-historical', async (req, res) => {
   // Format start date
   const formattedStartDate = formatDateForAPI(new Date(start_date), interval);
 
-  console.log(`📅 Historical API Request: ${symbol} from ${formattedStartDate} to ${formattedEndDate} (${interval})`);
+  console.log(`📅 Historical API Request: ${symbol} from ${formattedStartDate} to ${formattedEndDate} (${interval}${outputsize ? `, outputsize: ${outputsize}` : ''})`);
   
-  const url = `${TWELVE_DATA_BASE_URL}/time_series?apikey=${TWELVE_DATA_API_KEY}&interval=${interval}&symbol=${symbol}&start_date=${formattedStartDate}&end_date=${formattedEndDate}&dp=2&format=JSON`;
+  let url = `${TWELVE_DATA_BASE_URL}/time_series?apikey=${TWELVE_DATA_API_KEY}&interval=${interval}&symbol=${symbol}&start_date=${formattedStartDate}&end_date=${formattedEndDate}&dp=2&format=JSON`;
+  
+  // Add outputsize parameter if provided
+  if (outputsize && Number.isInteger(parseInt(outputsize)) && parseInt(outputsize) > 0) {
+    url += `&outputsize=${outputsize}`;
+  }
 
   try {
     console.log(`🌐 Fetching historical data from Twelve Data: ${url}`);

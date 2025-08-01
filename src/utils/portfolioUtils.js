@@ -1,3 +1,5 @@
+import { logger } from './logger';
+
 /**
  * Calculate ETF-like average price for a watchlist
  * This function normalizes prices across different purchase dates to create a meaningful average
@@ -49,23 +51,32 @@ export function calculateETFPrice(items) {
     // Find the price at the latest date for this stock
     let currentPrice = buyPrice; // fallback to buy price
     
-    // Find the most recent price in historical data
-    const sortedData = [...item.historicalData].sort((a, b) => 
-      new Date(b.timestamp) - new Date(a.timestamp)
-    );
-    
-    if (sortedData.length > 0) {
-      currentPrice = Number(sortedData[0].price);
+    // Use currentPrice field if available (from auto-fetch), otherwise use latest historical price
+    if (typeof item.currentPrice === 'number' && item.currentPrice > 0) {
+      currentPrice = item.currentPrice;
+    } else if (item.historicalData && item.historicalData.length > 0) {
+      // Find the most recent price in historical data
+      const sortedData = [...item.historicalData].sort((a, b) => 
+        new Date(b.timestamp) - new Date(a.timestamp)
+      );
+      
+      if (sortedData.length > 0) {
+        currentPrice = Number(sortedData[0].price);
+      }
     }
 
+    // For P&L calculation, use the actual buy price that should be used for returns
+    // This handles manually changed buy dates where buyPrice reflects the historical price from that date
+    const effectiveBuyPrice = buyPrice;
+    
     return {
       symbol: item.symbol,
       buyPrice,
       buyDate,
       currentPrice,
       normalizedPrice: currentPrice, // For now, use current price as normalized
-      priceChange: currentPrice - buyPrice,
-      priceChangePercent: ((currentPrice - buyPrice) / buyPrice) * 100
+      priceChange: currentPrice - effectiveBuyPrice,
+      priceChangePercent: effectiveBuyPrice > 0 ? ((currentPrice - effectiveBuyPrice) / effectiveBuyPrice) * 100 : 0
     };
   });
 
@@ -246,7 +257,7 @@ export function calculatePortfolioBeta(items, timeframe = 'D') {
     };
     
   } catch (error) {
-    console.error('Error calculating portfolio beta:', error);
+    logger.error('Error calculating portfolio beta:', error);
     return { beta: 0, confidence: 0, marketCorrelation: 0 };
   }
 } 

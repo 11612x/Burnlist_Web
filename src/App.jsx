@@ -5,7 +5,9 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 // App pages
 import Home from "@pages/HomePage";
 import BurnPage from "@pages/burnPage";
-import MockWatchlistPage from "@pages/MockWatchlistPage";
+// Logging utility
+import { logger } from './utils/logger';
+
 import UniverseScreenerPage from "@pages/UniverseScreenerPage";
 import UniverseHomePage from "@pages/UniverseHomePage";
 import TradeDashboard from './pages/TradeDashboard';
@@ -13,7 +15,7 @@ import TradeJournal from './pages/TradeJournal';
 import AddStockPricePage from './pages/AddStockPricePage';
 import MarketPage from './pages/MarketPage';
 // Fetch manager for cleanup
-import { fetchManager } from '@data/fetchManager';
+import { fetchManager } from '@data/twelvedataFetchManager';
 import { ThemeProvider } from './ThemeContext';
 import MobileNavigation from './components/MobileNavigation';
 
@@ -23,7 +25,7 @@ function App() {
   const [watchlists, setWatchlists] = useState(() => {
     try {
       const saved = localStorage.getItem("burnlist_watchlists");
-      console.log("Loaded watchlists from localStorage:", saved);
+      logger.info("💾 Loaded watchlists from localStorage:", saved);
       return saved ? JSON.parse(saved) : {};
     } catch {
       return {};
@@ -32,7 +34,7 @@ function App() {
 
   // Persist watchlists to localStorage on changes
   useEffect(() => {
-    console.log("Saving watchlists to localStorage:", watchlists);
+    logger.info("💾 Saving watchlists to localStorage:", watchlists);
     localStorage.setItem("burnlist_watchlists", JSON.stringify(watchlists));
   }, [watchlists]);
 
@@ -55,8 +57,7 @@ function App() {
             path="/watchlist/:slug"
             element={<BurnPage watchlists={watchlists} setWatchlists={setWatchlists} />}
           />
-          {/* Route for mock watchlist testing - remove when not needed */}
-          <Route path="/mockwatchlist" element={<MockWatchlistPage />} />
+
           {/* Route for Universe Homepage */}
           <Route path="/universes" element={<UniverseHomePage />} />
           {/* Route for Universe Screener */}

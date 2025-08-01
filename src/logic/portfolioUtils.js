@@ -1,18 +1,23 @@
+import { logger } from '../utils/logger';
+
 export function getAverageReturn(historicalSnapshots, timeframe) {
-  console.log('🔍 getAverageReturn called with timeframe:', timeframe, 'snapshots:', historicalSnapshots.length);
+  logger.log('🔍 getAverageReturn called with timeframe:', timeframe, 'snapshots:', historicalSnapshots.length);
   const now = new Date();
   const msPerDay = 24 * 60 * 60 * 1000;
   let earliest;
 
   switch (timeframe) {
     case "D":
-      earliest = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Daily = previous trading day at midnight (not 24 hours ago)
+      earliest = new Date(now.getTime() - 1 * msPerDay);
+      earliest.setHours(0, 0, 0, 0);
       break;
     case "W":
       earliest = new Date(now.getTime() - 7 * msPerDay);
       break;
     case "M":
       earliest = new Date(now.getTime() - 30 * msPerDay);
+      logger.log(`📅 [OLD getAverageReturn] MONTHLY: 30 days ago = ${earliest.toDateString()}`);
       break;
     case "Y":
       earliest = new Date(now.getTime() - 365 * msPerDay);
@@ -33,7 +38,7 @@ export function getAverageReturn(historicalSnapshots, timeframe) {
     const buyDate = snapshot.buyDate;
     const buyPrice = snapshot.buyPrice;
     
-    console.log(`[Header Loop] Processing ${symbol}: historicalData length: ${historicalData?.length || 0}, buyDate: ${buyDate}, buyPrice: ${buyPrice}`);
+    logger.log(`[Header Loop] Processing ${symbol}: historicalData length: ${historicalData?.length || 0}, buyDate: ${buyDate}, buyPrice: ${buyPrice}`);
 
     if (!Array.isArray(historicalData)) {
       continue;
@@ -44,7 +49,7 @@ export function getAverageReturn(historicalSnapshots, timeframe) {
 
     const { startPoint, endPoint } = getSlicedData(historicalData, timeframe, validBuyDate, symbol, buyPrice);
     
-    console.log(`[Header Debug] ${symbol}: startPoint:`, startPoint, 'endPoint:', endPoint);
+    logger.debug(`[Header Debug] ${symbol}: startPoint:`, startPoint, 'endPoint:', endPoint);
 
     if (
       startPoint &&
@@ -56,11 +61,11 @@ export function getAverageReturn(historicalSnapshots, timeframe) {
       const individualReturn =
         ((endPoint.price - startPoint.price) / startPoint.price) * 100;
 
-      console.log(`[Header %] ${symbol}:`);
-      console.log("Start Point (header):", startPoint);
-      console.log("End Point (header):", endPoint);
-      console.log("Calculated Return (header):", individualReturn);
-      console.log("Running total:", totalReturn, "count:", count);
+      logger.log(`[Header %] ${symbol}:`);
+      logger.log("Start Point (header):", startPoint);
+      logger.log("End Point (header):", endPoint);
+      logger.log("Calculated Return (header):", individualReturn);
+      logger.log("Running total:", totalReturn, "count:", count);
 
       totalReturn += individualReturn;
       count++;
@@ -68,7 +73,7 @@ export function getAverageReturn(historicalSnapshots, timeframe) {
   }
 
   const finalAverage = count > 0 ? totalReturn / count : 0;
-  console.log(`[Header Final] Total: ${totalReturn}, Count: ${count}, Average: ${finalAverage}%`);
+  logger.log(`[Header Final] Total: ${totalReturn}, Count: ${count}, Average: ${finalAverage}%`);
   return finalAverage;
 }
 
@@ -79,9 +84,9 @@ export function getSlicedData(data, timeframe, buyDate, symbol = "?", buyPrice =
 
   const normalizedTimeframe = {
     D: "D",
-    W: "WEEK",
-    M: "MONTH",
-    Y: "YEAR",
+    W: "W",
+    M: "M",
+    Y: "Y", 
     YTD: "YTD",
     MAX: "MAX"
   }[timeframe] || timeframe;
@@ -89,23 +94,31 @@ export function getSlicedData(data, timeframe, buyDate, symbol = "?", buyPrice =
   let timeframeStart;
   switch (normalizedTimeframe) {
     case "D":
-      // Use start of today (midnight) for daily calculations
-      timeframeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Daily = previous trading day (not 24 hours ago, since we have daily data at midnight)
+      timeframeStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      timeframeStart.setHours(0, 0, 0, 0); // Set to midnight of previous day
+      logger.log(`📅 DAILY timeframe: Using previous day at midnight = ${timeframeStart.toISOString()}`);
       break;
-    case "WEEK":
-      // Use exactly 7 days ago at the same time
+    case "W":
+      // Weekly = exactly 7 days ago
       timeframeStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      logger.log(`📅 WEEKLY timeframe: Using 7 days ago = ${timeframeStart.toISOString()}`);
       break;
-    case "MONTH":
-      // Use exactly 31 days ago at the same time
-      timeframeStart = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000);
+    case "M":
+      // Monthly = exactly 30 days ago (not 31)
+      timeframeStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      logger.log(`📅 MONTHLY timeframe: Using 30 days ago = ${timeframeStart.toISOString()}`);
+      logger.log(`📅 MONTHLY timeframe: Today is ${now.toISOString()}, 30 days ago is ${timeframeStart.toDateString()}`);
       break;
-    case "YEAR":
-      // Use exactly 365 days ago at the same time
+    case "Y":
+      // Yearly = exactly 365 days ago
       timeframeStart = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+      logger.log(`📅 YEARLY timeframe: Using 365 days ago = ${timeframeStart.toISOString()}`);
       break;
     case "YTD":
+      // YTD = January 1 of current year
       timeframeStart = new Date(now.getFullYear(), 0, 1);
+      logger.log(`📅 YTD timeframe: Using Jan 1 = ${timeframeStart.toISOString()}`);
       break;
     case "MAX":
     default:
@@ -113,31 +126,77 @@ export function getSlicedData(data, timeframe, buyDate, symbol = "?", buyPrice =
   }
 
   // For MAX timeframe: use buy date and buy price
-  // For all other timeframes: use the LATER of buy date or timeframe start
+  // For all other timeframes: use longest valid slice available within timeframe
   const buyDateObj = new Date(buyDate || data[0]?.timestamp || now);
   
   let startDate;
   let startPrice;
   
   if (timeframe === 'MAX') {
-    // MAX timeframe: use buy date and buy price
+    // MAX timeframe: use buy date and determine price from historical data at that date
     startDate = buyDateObj;
-    startPrice = (buyPrice && !isNaN(buyPrice)) ? Number(buyPrice) : data[0]?.price || 0;
+    
+    if (buyPrice && !isNaN(buyPrice)) {
+      // Use provided buy price
+      startPrice = Number(buyPrice);
+      logger.log(`📅 MAX timeframe: Using provided buy price ${startPrice} for ${symbol}`);
+    } else {
+      // Find historical price closest to buy date (for manual buy date changes)
+      const sortedData = [...data].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      const startIdx = binarySearchClosestIdx(sortedData, startDate.getTime());
+      startPrice = sortedData[startIdx]?.price || 0;
+      logger.log(`📅 MAX timeframe: Using historical price ${startPrice} from ${sortedData[startIdx]?.timestamp} for ${symbol} (closest to buy date ${buyDateObj.toISOString()})`);
+    }
+  } else if (timeframe === 'YTD') {
+    // YTD: Use the LATER of January 1st OR buy date
+    const jan1 = new Date(now.getFullYear(), 0, 1);
+    const effectiveStart = jan1 > buyDateObj ? jan1 : buyDateObj;
+    
+    const sortedData = [...data].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const firstDataPoint = sortedData[0];
+    const firstDataDate = new Date(firstDataPoint?.timestamp);
+    
+    // Use the effective start, but fallback to first available data if needed
+    if (firstDataDate <= effectiveStart) {
+      // Data goes back to at least our effective start date
+      startDate = effectiveStart;
+      const startIdx = binarySearchClosestIdx(sortedData, startDate.getTime());
+      startPrice = sortedData[startIdx]?.price || 0;
+      
+      if (jan1 > buyDateObj) {
+        logger.log(`📅 YTD: Using Jan 1st ${jan1.toDateString()} → price: ${startPrice} for ${symbol} (buy date is older)`);
+      } else {
+        logger.log(`📅 YTD: Using buy date ${buyDateObj.toDateString()} → price: ${startPrice} for ${symbol} (Jan 1st is before buy date)`);
+      }
+    } else {
+      // Data doesn't go back to our effective start, use first available data point
+      startDate = firstDataDate;
+      startPrice = firstDataPoint?.price || 0;
+      logger.log(`📅 YTD: Effective start not available, using first data point ${firstDataDate.toDateString()} → price: ${startPrice} for ${symbol}`);
+    }
   } else {
-    // All other timeframes: use the LATER of buy date or timeframe start
-    // This ensures recently bought stocks show performance from their buy date
-    startDate = buyDateObj > timeframeStart ? buyDateObj : timeframeStart;
+    // All other timeframes: Use the LATER of timeframe start OR buy date
+    // This ensures we don't show data from before the stock was actually bought
+    const effectiveStart = timeframeStart > buyDateObj ? timeframeStart : buyDateObj;
+    startDate = effectiveStart;
     
     // Find the closest data point to the effective start date
-    const startIdx = binarySearchClosestIdx(data, startDate.getTime());
-    startPrice = data[startIdx]?.price || 0;
+    const sortedData = [...data].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const startIdx = binarySearchClosestIdx(sortedData, startDate.getTime());
+    startPrice = sortedData[startIdx]?.price || 0;
     
-    console.log(`🔍 TIMEFRAME DEBUG ${symbol}: timeframe=${timeframe}`);
-    console.log(`🔍 Buy date: ${buyDateObj.toISOString()}`);
-    console.log(`🔍 Timeframe start: ${timeframeStart?.toISOString() || 'now'}`);
-    console.log(`🔍 Effective start: ${startDate.toISOString()} (${startDate === buyDateObj ? 'using buy date' : 'using timeframe start'})`);
-    console.log(`🔍 Found price=${startPrice} at index=${startIdx}`);
+    if (timeframeStart > buyDateObj) {
+      logger.log(`📅 ${normalizedTimeframe}: Using timeframe start ${timeframeStart.toISOString()} → price: ${startPrice} for ${symbol} (buy date is older)`);
+    } else {
+      logger.log(`📅 ${normalizedTimeframe}: Using buy date ${buyDateObj.toISOString()} → price: ${startPrice} for ${symbol} (timeframe would go before buy date)`);
+    }
   }
+  
+  logger.debug(`TIMEFRAME DEBUG ${symbol}: timeframe=${timeframe}`);
+  logger.log(`🔍 Buy date: ${buyDateObj.toISOString()}`);
+  logger.log(`🔍 Timeframe start: ${timeframeStart?.toISOString() || 'now'}`);
+  logger.log(`🔍 Effective start: ${startDate.toISOString()}`);
+  logger.log(`🔍 Start price: ${startPrice}`);
   
   // --- Binary search for startPoint ---
   function binarySearchClosestIdx(arr, target) {
@@ -167,49 +226,57 @@ export function getSlicedData(data, timeframe, buyDate, symbol = "?", buyPrice =
   let startPoint = null;
   let endPoint = null;
   
+  // Sort data by timestamp to ensure we get the actual latest point (ascending: oldest to newest)
+  const sortedData = [...data].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  
+  // Debug: Show the actual data range
+  const firstDataPoint = sortedData[0];
+  const lastDataPoint = sortedData[sortedData.length - 1];
+  logger.debug(`Data range for ${symbol}: ${firstDataPoint?.timestamp} to ${lastDataPoint?.timestamp}`);
+  
   // Find the start point data
-  const startIdx = binarySearchClosestIdx(data, startDate.getTime());
+  const startIdx = binarySearchClosestIdx(sortedData, startDate.getTime());
   startPoint = {
-    ...data[startIdx],
+    ...sortedData[startIdx],
     timestamp: startDate.toISOString(),
     price: startPrice
   };
   
-  // End point is always the latest available data point
-  endPoint = data[data.length - 1];
+  // End point is always the latest available data point (last in sorted array)
+  endPoint = sortedData[sortedData.length - 1];
   
-  console.log(`✅ Return calculation for ${symbol} (${timeframe}):`);
+  logger.debug(`Return calculation for ${symbol} (${timeframe}):`);
   if (timeframe === 'MAX') {
-    console.log(`✅ Start: Buy date ${buyDateObj.toISOString()} → Buy Price: ${startPoint.price}`);
+    logger.log(`✅ Start: Buy date ${buyDateObj.toISOString()} → Buy Price: ${startPoint.price}`);
   } else {
-    console.log(`✅ Buy date: ${buyDateObj.toISOString()}`);
-    console.log(`✅ Timeframe start: ${timeframeStart?.toISOString() || 'now'}`);
-    console.log(`✅ Effective start: ${startDate.toISOString()} → Price: ${startPoint.price}`);
+    logger.log(`✅ Buy date: ${buyDateObj.toISOString()}`);
+    logger.log(`✅ Timeframe start: ${timeframeStart?.toISOString() || 'now'}`);
+    logger.log(`✅ Effective start: ${startDate.toISOString()} → Price: ${startPoint.price}`);
     if (startDate === buyDateObj) {
-      console.log(`✅ Using buy date (more recent than timeframe start)`);
+      logger.log(`✅ Using buy date (more recent than timeframe start)`);
     } else {
-      console.log(`✅ Using timeframe start (buy date is older)`);
+      logger.log(`✅ Using timeframe start (buy date is older)`);
     }
   }
-  console.log(`✅ End: ${endPoint?.timestamp} → Price: ${endPoint?.price}`);
+  logger.log(`✅ End: ${endPoint?.timestamp} → Price: ${endPoint?.price}`);
   if (startPoint && endPoint && startPoint.price && endPoint.price) {
     const calculatedReturn = ((endPoint.price - startPoint.price) / startPoint.price * 100);
-    console.log(`✅ Return: ${calculatedReturn.toFixed(2)}%`);
-    console.log(`🔍 DEBUG: startPoint.price=${startPoint.price}, endPoint.price=${endPoint.price}, difference=${endPoint.price - startPoint.price}`);
-    console.log(`🔍 TIMESTAMP DEBUG: startPoint.timestamp=${startPoint.timestamp}, endPoint.timestamp=${endPoint.timestamp}`);
+    logger.log(`✅ Return: ${calculatedReturn.toFixed(2)}%`);
+    logger.debug(`DEBUG: startPoint.price=${startPoint.price}, endPoint.price=${endPoint.price}, difference=${endPoint.price - startPoint.price}`);
+    logger.debug(`TIMESTAMP DEBUG: startPoint.timestamp=${startPoint.timestamp}, endPoint.timestamp=${endPoint.timestamp}`);
   }
 
   if (!startPoint) {
-    console.warn(`⛔ No valid startPoint found for ${symbol}`);
+    logger.warn(`⛔ No valid startPoint found for ${symbol}`);
     return { startPoint: null, endPoint: null };
   }
 
   if (!endPoint) {
-    console.warn(`⛔ No valid endPoint found for ${symbol}`);
+    logger.warn(`⛔ No valid endPoint found for ${symbol}`);
     return { startPoint: null, endPoint: null };
   }
 
-  console.log(`Filtered ${data.length} → start = ${startPoint?.price} @ ${startPoint?.timestamp}, end = ${endPoint?.price} @ ${endPoint?.timestamp}, buyDate = ${buyDateObj.toISOString()}`);
+  logger.log(`Filtered ${sortedData.length} → start = ${startPoint?.price} @ ${startPoint?.timestamp}, end = ${endPoint?.price} @ ${endPoint?.timestamp}, buyDate = ${buyDateObj.toISOString()}`);
 
   return { startPoint, endPoint };
 }
@@ -218,7 +285,7 @@ export function getSlicedData(data, timeframe, buyDate, symbol = "?", buyPrice =
 export function getReturnInTimeframe(data, timeframe, buyDate = null, symbol = "?") {
   const { startPoint, endPoint } = getSlicedData(data, timeframe, buyDate, symbol);
   if (!buyDate) {
-    console.warn(`⚠️ [getReturnInTimeframe] No buyDate passed for ${symbol}. Defaulting to timeframe start.`);
+    logger.warn(`⚠️ [getReturnInTimeframe] No buyDate passed for ${symbol}. Defaulting to timeframe start.`);
   }
 
   if (
@@ -230,14 +297,14 @@ export function getReturnInTimeframe(data, timeframe, buyDate = null, symbol = "
   ) {
     const percentChange = ((endPoint.price - startPoint.price) / startPoint.price) * 100;
 
-    console.log(`[Return %] ${symbol}:`);
-    console.log("Start Point (return %):", startPoint);
-    console.log("End Point (return %):", endPoint);
-    console.log("Calculated Return (return %):", percentChange);
+    logger.log(`[Return %] ${symbol}:`);
+    logger.log("Start Point (return %):", startPoint);
+    logger.log("End Point (return %):", endPoint);
+    logger.log("Calculated Return (return %):", percentChange);
 
     return percentChange;
   } else {
-    console.warn(`[Return %] Incomplete data for ${symbol}. Returning 0.`);
+    logger.warn(`[Return %] Incomplete data for ${symbol}. Returning 0.`);
     return 0;
   }
 }

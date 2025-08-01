@@ -1,0 +1,29 @@
+{
+  "name": "burnlist-twelvedata-api-server",
+  "version": "1.0.0",
+  "description": "Twelve Data API server for Burnlist",
+  "main": "twelvedata-api-server.cjs",
+  "scripts": {
+    "start": "node twelvedata-api-server.cjs",
+    "dev": "nodemon twelvedata-api-server.cjs",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "twelvedata",
+    "api",
+    "burnlist",
+    "stock-data"
+  ],
+  "author": "Burnlist Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+} 

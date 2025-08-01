@@ -6,6 +6,7 @@ import { isValidTicker, normalizeSymbol } from '@data/tickerUtils';
 import NotificationBanner from '@components/NotificationBanner';
 import CustomButton from '@components/CustomButton';
 import { useTheme } from '../ThemeContext';
+import { logger } from '../utils/logger';
 import backButton from '../assets/backbutton.png';
 import { calculateBuyScore } from '../data/buyScore';
 import { FaEdit, FaCheck, FaTrash } from 'react-icons/fa';
@@ -180,7 +181,7 @@ const UniverseScreenerPage = () => {
         }
       }
     } catch (error) {
-      console.error("Failed to load universes:", error);
+      logger.error("Failed to load universes:", error);
     }
   }, [slug]);
 
@@ -274,7 +275,7 @@ const UniverseScreenerPage = () => {
       setNotificationType("success");
 
     } catch (error) {
-      console.error("Error adding tickers:", error);
+      logger.error("Error adding tickers:", error);
       setNotification("Failed to add tickers");
       setNotificationType("error");
     } finally {
@@ -383,12 +384,16 @@ const UniverseScreenerPage = () => {
     setSelectedRows(new Set());
   };
 
-  const handleCreateWatchlist = () => {
+  const handleCreateWatchlist = async () => {
     if (selectedItems.size === 0) {
       setNotification("Please select at least one ticker");
       setNotificationType("error");
       return;
     }
+
+    setIsLoading(true);
+    setNotification("Creating watchlist with fresh market data...");
+    setNotificationType("info");
 
     try {
       const selectedUniverseItems = (universe?.items || []).filter(item => selectedItems.has(item.id));
@@ -399,37 +404,68 @@ const UniverseScreenerPage = () => {
       const watchlistName = `Screener ${formatDateEuropean(new Date())}`;
       const watchlistSlug = watchlistName.toLowerCase().replace(/[^a-z0-9]/g, '-');
       
+      // Fetch fresh market data for each selected item
+      const watchlistItems = [];
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (const item of selectedUniverseItems) {
+        try {
+          // Use createTicker to fetch fresh market data
+          const freshTicker = await createTicker(
+            item.symbol,
+            'real',
+            parseFloat(item.entryPrice) || null, // Use entry price if available
+            null // Use current date
+          );
+          
+          if (freshTicker) {
+            watchlistItems.push(freshTicker);
+            successCount++;
+          } else {
+            errorCount++;
+            logger.warn(`Failed to fetch data for ${item.symbol}`);
+          }
+          
+          // Add delay between requests to prevent rate limiting
+          if (selectedUniverseItems.length > 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        } catch (error) {
+          errorCount++;
+          logger.error(`Error fetching data for ${item.symbol}:`, error);
+        }
+      }
+      
+      if (watchlistItems.length === 0) {
+        setNotification("Failed to fetch market data for any selected tickers");
+        setNotificationType("error");
+        setIsLoading(false);
+        return;
+      }
+      
       const newWatchlist = {
         id: watchlistId,
         name: watchlistName,
         slug: watchlistSlug,
-        items: selectedUniverseItems.map(item => ({
-          symbol: item.symbol,
-          buyPrice: parseFloat(item.entryPrice) || parseFloat(item.lastPrice) || 0,
-          buyDate: new Date().toISOString(),
-          historicalData: [{
-            price: parseFloat(item.entryPrice) || parseFloat(item.lastPrice) || 0,
-            timestamp: new Date().toISOString()
-          }],
-          addedAt: new Date().toISOString(),
-          type: 'real',
-          isMock: false
-        })),
-        reason: `Created from screener with ${selectedUniverseItems.length} tickers`,
+        items: watchlistItems,
+        reason: `Created from screener with ${successCount} tickers (${errorCount} failed)`,
         createdAt: new Date().toISOString()
       };
 
       const updatedWatchlists = { ...watchlists, [watchlistId]: newWatchlist };
       localStorage.setItem("burnlist_watchlists", JSON.stringify(updatedWatchlists));
       
-      setNotification(`Created watchlist "${watchlistName}" with ${selectedUniverseItems.length} tickers`);
+      setNotification(`Created watchlist "${watchlistName}" with ${successCount} tickers${errorCount > 0 ? ` (${errorCount} failed)` : ''}`);
       setNotificationType("success");
       setSelectedItems(new Set());
       
     } catch (error) {
-      console.error("Error creating watchlist:", error);
+      logger.error("Error creating watchlist:", error);
       setNotification("Failed to create watchlist");
       setNotificationType("error");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -614,15 +650,15 @@ const UniverseScreenerPage = () => {
         if (priceData && priceData.length > 0) {
           setCurrentMarketPrice(priceData[0].price);
         } else {
-          console.warn(`No price data received for ${symbol}`);
+          logger.warn(`No price data received for ${symbol}`);
           setCurrentMarketPrice(null);
         }
       } else {
-        console.warn(`API error for ${symbol}: ${response.status}`);
+        logger.warn(`API error for ${symbol}: ${response.status}`);
         setCurrentMarketPrice(null);
       }
     } catch (error) {
-      console.error("Error fetching current market price:", error);
+      logger.error("Error fetching current market price:", error);
       setCurrentMarketPrice(null);
     } finally {
       setIsFetchingPrice(false);
@@ -732,7 +768,7 @@ const UniverseScreenerPage = () => {
           
           if (priceData && priceData.length > 0) {
             currentMarketPrice = priceData[0].price;
-            console.log(`📊 Latest price for ${item.symbol}: $${currentMarketPrice}`);
+            logger.log(`📊 Latest price for ${item.symbol}: $${currentMarketPrice}`);
             
             // Ask user if they want to use current market price or keep manual entry
             useCurrentPrice = window.confirm(
@@ -743,7 +779,7 @@ const UniverseScreenerPage = () => {
           }
         }
       } catch (apiError) {
-        console.warn("Twelve Data API not available, using manual entry price:", apiError);
+        logger.warn("Twelve Data API not available, using manual entry price:", apiError);
         setNotification("Using manual entry price (API unavailable)");
         setNotificationType("info");
       }
@@ -797,7 +833,7 @@ const UniverseScreenerPage = () => {
       setNotificationType("success");
       
     } catch (error) {
-      console.error("Error executing trade:", error);
+      logger.error("Error executing trade:", error);
       setNotification(`Failed to execute trade: ${error.message}`);
       setNotificationType("error");
     }
@@ -865,7 +901,7 @@ const UniverseScreenerPage = () => {
       const chartUrl = `https://www.tradingview.com/chart/i0seCgVv/?symbol=${encodedSymbol}`;
       window.open(chartUrl, '_blank');
     } catch (error) {
-      console.warn(`⚠️ Error opening chart for ${symbol}:`, error);
+      logger.warn(`⚠️ Error opening chart for ${symbol}:`, error);
       // Fallback to NASDAQ if there's an error
       const encodedSymbol = encodeURIComponent(`NASDAQ:${symbol.toUpperCase()}`);
       const chartUrl = `https://www.tradingview.com/chart/i0seCgVv/?symbol=${encodedSymbol}`;
@@ -997,9 +1033,9 @@ const UniverseScreenerPage = () => {
         </CustomButton>
         <CustomButton 
           onClick={handleCreateWatchlist}
-          disabled={selectedItems.size === 0}
+          disabled={selectedItems.size === 0 || isLoading}
         >
-          CREATE WATCHLIST FROM SELECTED ({selectedItems.size})
+          {isLoading ? "CREATING WATCHLIST..." : `CREATE WATCHLIST FROM SELECTED (${selectedItems.size})`}
         </CustomButton>
         
         {/* Mass Quick Trade Type Controls - Only show in edit mode */}
@@ -1086,6 +1122,14 @@ const UniverseScreenerPage = () => {
           onChange={handleSelectAllRows}
           style={{ accentColor: CRT_GREEN }}
         />
+      ) : (
+        <input
+          type="checkbox"
+          checked={selectedItems.size === (universe?.items?.length || 0) && (universe?.items?.length || 0) > 0}
+          onChange={handleSelectAll}
+          style={{ accentColor: CRT_GREEN }}
+        />
+      )}
       ) : null}
              </th>
              <th 
@@ -1193,7 +1237,14 @@ const UniverseScreenerPage = () => {
             onChange={() => handleSelectRow(item.id)}
             style={{ accentColor: CRT_GREEN }}
           />
-        ) : null}
+        ) : (
+          <input
+            type="checkbox"
+            checked={selectedItems.has(item.id)}
+            onChange={() => handleSelectItem(item.id)}
+            style={{ accentColor: CRT_GREEN }}
+          />
+        )}
               </td>
               <td style={{ width: "7.14%", padding: "8px", textAlign: "left" }}>
                 <span

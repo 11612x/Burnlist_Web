@@ -5,6 +5,7 @@ import { useSortedItems } from "@hooks/useSortedItems";
 import { getReturnInTimeframe, getSlicedData } from "@logic/portfolioUtils";
 import { useThemeColor } from '../ThemeContext';
 import MobileTableWrapper from "./MobileTableWrapper";
+import { logger } from '../utils/logger';
 
 const CRT_GREEN = 'rgb(140,185,162)';
 
@@ -14,6 +15,8 @@ const TickerTable = ({
   handleChangeSymbol,
   handleBuyPriceChange,
   handleBuyDateChange,
+  handleRevertBuyDate,
+  handleFetchHistoricalData,
   handleDelete,
   handleRefreshPrice,
   selectedTimeframe,
@@ -21,7 +24,7 @@ const TickerTable = ({
   const green = useThemeColor(CRT_GREEN);
   const black = useThemeColor('black');
   if (!Array.isArray(items)) {
-    console.warn("\u26a0\ufe0f TickerTable received invalid items prop:", items);
+    logger.warn("\u26a0\ufe0f TickerTable received invalid items prop:", items);
     return null;
   }
   // State to keep track of sorting configuration: key and direction
@@ -29,7 +32,7 @@ const TickerTable = ({
 
   // Toggle sort direction or set new key when a header is clicked
   const handleSort = (key) => {
-    console.log(`\ud83e\udded handleSort triggered for key: ${key}`);
+    logger.log(`\ud83e\udded handleSort triggered for key: ${key}`);
     setSortConfig((prev) => {
       if (prev.key === key) {
         // If the same key is clicked, toggle the direction
@@ -53,7 +56,7 @@ const TickerTable = ({
   const averageReturn = useAverageReturn(sortedItems);
 
   // Debug average return value
-  console.log("\ud83d\udcca Average return from sortedItems:", averageReturn);
+  logger.log("\ud83d\udcca Average return from sortedItems:", averageReturn);
 
   // If a global setter function exists, update it with the latest average return
   if (typeof window !== "undefined" && typeof window.setWatchlistAverageReturn === "function") {
@@ -109,7 +112,7 @@ const TickerTable = ({
                 minWidth: '60px',
               }
             }}>
-              Buy Price {renderSortArrow("buyPrice")}
+              {selectedTimeframe === 'MAX' ? 'Buy Price' : 'Start Price'} {renderSortArrow("buyPrice")}
             </th>
             <th style={{ 
               padding: '8px 4px', 
@@ -188,13 +191,13 @@ const TickerTable = ({
         <tbody>
           {/* Render each sorted item as a TickerRow component */}
           {sortedItems.map((item, index) => {
-            console.log(`🩹 Rendering row for ${item.symbol}`);
+            logger.log(`🩹 Rendering row for ${item.symbol}`);
             // Safely resolve buyPrice
             let resolvedBuyPrice;
             if (typeof item.buyPrice === "number") {
               resolvedBuyPrice = item.buyPrice;
             } else if (Array.isArray(item.historicalData) && item.historicalData.length > 0) {
-              resolvedBuyPrice = item.historicalData[0].price; // likely a mock stock
+              resolvedBuyPrice = item.historicalData[0].price;
             } else if (typeof item.currentPrice === "number") {
               resolvedBuyPrice = item.currentPrice; // fallback for real stock on first fetch
             }
@@ -210,31 +213,80 @@ const TickerTable = ({
             !Array.isArray(item.historicalData) ||
             item.historicalData.length === 0
           ) {
-            console.warn(`\u26a0\ufe0f Invalid ticker data for ${item.symbol}. Skipping row.`, item);
+            logger.warn(`\u26a0\ufe0f Invalid ticker data for ${item.symbol}. Skipping row.`, item);
             return null;
           }
 
-          // Calculate timeframe-based return percentage (same as header)
+          // Calculate timeframe-based return percentage with new clean logic
           const validBuyDate = item.buyDate && new Date(item.buyDate).toString() !== 'Invalid Date' ? item.buyDate : null;
-          console.log(`🔍 [TickerTable] Calling getSlicedData for ${item.symbol}:`, {
-            historicalDataLength: item.historicalData?.length,
-            selectedTimeframe,
-            validBuyDate,
-            buyPrice: item.buyPrice
-          });
-          const { startPoint, endPoint } = getSlicedData(item.historicalData, selectedTimeframe, validBuyDate, item.symbol, item.buyPrice);
+          
+          logger.debug(`[NEW LOGIC] ${item.symbol} in timeframe: ${selectedTimeframe}`);
+          
+          let startPoint, endPoint;
+          
+          if (selectedTimeframe === 'MAX') {
+            // MAX timeframe: Always use stored buyPrice vs current price (investment logic)
+            logger.debug(`[MAX MODE DEBUG] ${item.symbol}:`);
+            logger.debug(`  - Stored buyPrice: ${item.buyPrice}`);
+            logger.debug(`  - Stored buyDate: ${item.buyDate}`);
+            logger.debug(`  - Current price: ${item.currentPrice}`);
+            logger.debug(`  - Historical data points: ${item.historicalData?.length || 0}`);
+            if (item.historicalData?.length > 0) {
+              const first = item.historicalData[0];
+              const last = item.historicalData[item.historicalData.length - 1];
+              logger.debug(`  - First historical point: ${first.timestamp} → $${first.price}`);
+              logger.debug(`  - Last historical point: ${last.timestamp} → $${last.price}`);
+            }
+            const { startPoint: sp, endPoint: ep } = getSlicedData(item.historicalData, selectedTimeframe, validBuyDate, item.symbol, null);
+            startPoint = sp;
+            endPoint = ep;
+          } else {
+            // Other timeframes: Always use timeframe start price, ignore custom buy dates (performance window logic)
+            logger.debug(`[TIMEFRAME MODE] Using timeframe start price for ${selectedTimeframe}, ignoring custom buy date for ${item.symbol}`);
+            const { startPoint: sp, endPoint: ep } = getSlicedData(item.historicalData, selectedTimeframe, null, item.symbol, null);
+            startPoint = sp;
+            endPoint = ep;
+          }
           
           let changePercent = 0;
-          let lookedUpBuyPrice = item.buyPrice; // Default to original buy price
+          let displayPrice = item.buyPrice; // Default fallback
           
-
-          
-          if (startPoint && endPoint && typeof startPoint.price === "number" && typeof endPoint.price === "number" && startPoint.price > 0) {
-            changePercent = ((endPoint.price - startPoint.price) / startPoint.price) * 100;
-            lookedUpBuyPrice = startPoint.price; // Use the looked-up price
-            console.log(`[Table %] ${item.symbol}: startPoint: ${startPoint.price}, endPoint: ${endPoint.price}, changePercent: ${changePercent}%`);
-            console.log(`[Table Price] ${item.symbol}: lookedUpBuyPrice: ${lookedUpBuyPrice}`);
-            console.log(`🔍 DEBUG ${item.symbol}: startPoint.price=${startPoint.price}, endPoint.price=${endPoint.price}, difference=${endPoint.price - startPoint.price}, calculation=${((endPoint.price - startPoint.price) / startPoint.price) * 100}`);
+          if (startPoint && typeof startPoint.price === "number" && startPoint.price > 0) {
+            // Update display price based on timeframe logic
+            if (selectedTimeframe === 'MAX') {
+              displayPrice = startPoint.price; // Show first price from manual date in MAX
+              logger.debug(`[MAX PRICE] ${item.symbol}: Using startPoint.price (first historical price): ${displayPrice}`);
+            } else {
+              displayPrice = startPoint.price; // Show timeframe start price in others
+            }
+            // Use currentPrice if available (from auto-fetch), otherwise use endPoint price
+            // NEVER fall back to buyPrice as current price - that makes no sense!
+            let currentPrice;
+            
+            if (typeof item.currentPrice === 'number') {
+              currentPrice = item.currentPrice;
+            } else if (endPoint && typeof endPoint.price === 'number') {
+              currentPrice = endPoint.price;
+            } else {
+              logger.warn(`⚠️ No valid current price found for ${item.symbol}, skipping calculation`);
+              return null; // Skip this ticker entirely
+            }
+            
+            // Calculate percentage change using the correct reference price for each timeframe
+            let referencePrice;
+            if (selectedTimeframe === 'MAX') {
+              // MAX timeframe: Use startPoint.price (actual historical price from manual date) as reference
+              referencePrice = startPoint.price;
+              changePercent = ((currentPrice - referencePrice) / referencePrice) * 100;
+              logger.debug(`[Table % MAX] ${item.symbol}: startPoint.price: ${referencePrice}, currentPrice: ${currentPrice}, changePercent: ${changePercent}%`);
+            } else {
+              // Other timeframes: Use timeframe start price as reference
+              referencePrice = startPoint.price;
+              changePercent = ((currentPrice - referencePrice) / referencePrice) * 100;
+              logger.debug(`[Table % ${selectedTimeframe}] ${item.symbol}: startPoint: ${referencePrice}, currentPrice: ${currentPrice}, changePercent: ${changePercent}%`);
+            }
+            logger.debug(`[Table Price] ${item.symbol}: displayPrice: ${displayPrice} (${selectedTimeframe === 'MAX' ? 'buyPrice' : 'timeframe start price'})`);
+            logger.debug(`DEBUG ${item.symbol}: referencePrice=${referencePrice}, currentPrice=${currentPrice}, difference=${currentPrice - referencePrice}, calculation=${((currentPrice - referencePrice) / referencePrice) * 100}`);
           }
 
           // Find the original index in the unsorted items array
@@ -253,12 +305,14 @@ const TickerTable = ({
               handleChangeSymbol={handleChangeSymbol}
               handleBuyPriceChange={typeof handleBuyPriceChange === 'function' ? handleBuyPriceChange : undefined}
               handleBuyDateChange={typeof handleBuyDateChange === 'function' ? handleBuyDateChange : undefined}
+              handleRevertBuyDate={typeof handleRevertBuyDate === 'function' ? handleRevertBuyDate : undefined}
+              handleFetchHistoricalData={typeof handleFetchHistoricalData === 'function' ? handleFetchHistoricalData : undefined}
               handleDelete={typeof handleDelete === 'function' ? handleDelete : undefined}
               handleRefreshPrice={typeof handleRefreshPrice === 'function' ? handleRefreshPrice : undefined}
               items={items}
               selectedTimeframe={selectedTimeframe}
               changePercent={changePercent}
-              lookedUpBuyPrice={lookedUpBuyPrice}
+              lookedUpBuyPrice={displayPrice}
             />
           );
         })}

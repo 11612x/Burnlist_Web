@@ -92,7 +92,7 @@ import{r as Yi,a as nv,g as Kt,b as v,c as iv,u as Er,d as sr,L as Gi,e as ol,R 
               }
             }
             
-            @media (max-width: 480px) {
+            @media (maxWidth: 480px) {
               .action-buttons-container {
                 position: fixed;
                 top: 50%;

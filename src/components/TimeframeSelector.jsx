@@ -12,8 +12,10 @@ const TimeframeSelector = ({ selected, onChange }) => {
         <button
           key={tf}
           onClick={() => {
-            console.log("Selected timeframe:", tf);
+            console.log("🎯 [TIMEFRAME SELECTOR] User clicked timeframe:", tf);
+            console.log("🎯 [TIMEFRAME SELECTOR] Previous timeframe was:", selected);
             onChange(tf);
+            console.log("🎯 [TIMEFRAME SELECTOR] onChange called with:", tf);
           }}
           style={{
             backgroundColor: selected === tf ? green : 'transparent',
