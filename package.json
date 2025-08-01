@@ -2,6 +2,9 @@
   "name": "burnlist",
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -27,7 +30,7 @@
     "serve": "^14.2.4",
     "slugify": "^1.6.6",
     "uuid": "^11.1.0",
-    "vite": "^7.0.0"
+    "vite": "7.0.6"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.6.2",
