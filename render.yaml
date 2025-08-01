@@ -1,7 +1,7 @@
 services:
-  # Frontend Web Service (builds and serves React app)
+  # Combined Web Service (frontend + API)
   - type: web
-    name: burnlist-frontend
+    name: burnlist-app
     env: node
     nodeVersion: 18
     buildCommand: npm ci --include=dev && npm run build
@@ -9,18 +9,6 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-    healthCheckPath: /
-
-  # Backend API Service
-  - type: web
-    name: burnlist-api
-    env: node
-    nodeVersion: 18
-    buildCommand: npm ci --include=dev
-    startCommand: node finviz-api-server.cjs
-    envVars:
-      - key: NODE_ENV
-        value: production
       - key: FINVIZ_API_TOKEN
         sync: false
-    healthCheckPath: /api/health
+    healthCheckPath: /
