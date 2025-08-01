@@ -643,7 +643,7 @@ const UniverseScreenerPage = () => {
     
     setIsFetchingPrice(true);
     try {
-      const response = await fetch(`http://localhost:3002/api/twelvedata-quote?symbols=${symbol}&interval=1min`);
+              const response = await fetch(`/api/twelvedata-quote?symbols=${symbol}&interval=1min`);
       
       if (response.ok) {
         const priceData = await response.json();
@@ -761,7 +761,7 @@ const UniverseScreenerPage = () => {
       
       try {
         // Fetch latest price from Twelve Data API
-        const response = await fetch(`http://localhost:3002/api/twelvedata-quote?symbols=${item.symbol}&interval=1min`);
+        const response = await fetch(`/api/twelvedata-quote?symbols=${item.symbol}&interval=1min`);
         
         if (response.ok) {
           const priceData = await response.json();

@@ -1,9 +1,9 @@
 import axios from 'axios';
 import { logger } from '../utils/logger';
 
-// Twelve Data API server endpoint - use Render.com API in production
+// Twelve Data API server endpoint - use same domain in production
 const TWELVE_DATA_API_BASE = process.env.NODE_ENV === 'production' 
-  ? 'https://burnlist-twelvedata-api.onrender.com/api'
+  ? '/api'
   : 'http://localhost:3002/api';
 
 // Map timeframe to Twelve Data interval format
