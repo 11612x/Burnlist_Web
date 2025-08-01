@@ -46,7 +46,23 @@ app.use('/api', async (req, res) => {
       }
       
       console.log(`✅ Historical data fetched for ${symbol}: ${data.values?.length || 0} records`);
-      res.json(data);
+      
+      // Transform the response to match the frontend's expected format
+      const transformedData = {
+        status: 'ok',
+        historicalData: data.values?.map(item => ({
+          price: parseFloat(item.close),
+          close: parseFloat(item.close),
+          open: parseFloat(item.open),
+          high: parseFloat(item.high),
+          low: parseFloat(item.low),
+          timestamp: item.datetime,
+          volume: parseInt(item.volume),
+          symbol: symbol
+        })) || []
+      };
+      
+      res.json(transformedData);
       
     } else if (pathname === '/twelvedata-quote') {
       // Handle quote requests
