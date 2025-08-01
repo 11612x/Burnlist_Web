@@ -1,12 +1,15 @@
 services:
-  # Frontend Static Site
+  # Frontend Web Service (serves static files)
   - type: web
     name: burnlist-frontend
-    env: static
-    staticPublishPath: ./dist
+    env: node
+    nodeVersion: 18
+    buildCommand: npm ci --include=dev
+    startCommand: node server.js
     envVars:
       - key: NODE_ENV
         value: production
+    healthCheckPath: /
 
   # Backend API Service
   - type: web
