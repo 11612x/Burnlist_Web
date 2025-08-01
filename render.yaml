@@ -1,10 +1,10 @@
 services:
-  # Frontend Web Service (serves static files)
+  # Frontend Web Service (builds and serves React app)
   - type: web
     name: burnlist-frontend
     env: node
     nodeVersion: 18
-    buildCommand: npm ci --include=dev
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: node server.js
     envVars:
       - key: NODE_ENV
