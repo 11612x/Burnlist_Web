@@ -3,7 +3,7 @@ services:
   - type: web
     name: burnlist-frontend
     env: node
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
@@ -14,7 +14,7 @@ services:
   - type: web
     name: burnlist-api
     env: node
-    buildCommand: npm install
+    buildCommand: npm install --include=dev
     startCommand: node finviz-api-server.cjs
     envVars:
       - key: NODE_ENV
