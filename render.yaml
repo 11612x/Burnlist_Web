@@ -3,7 +3,8 @@ services:
   - type: web
     name: burnlist-frontend
     env: node
-    buildCommand: npm install --include=dev && npm run build
+    nodeVersion: 18
+    buildCommand: rm -rf node_modules package-lock.json && npm install --include=dev && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
@@ -14,7 +15,8 @@ services:
   - type: web
     name: burnlist-api
     env: node
-    buildCommand: npm install --include=dev
+    nodeVersion: 18
+    buildCommand: rm -rf node_modules package-lock.json && npm install --include=dev
     startCommand: node finviz-api-server.cjs
     envVars:
       - key: NODE_ENV
