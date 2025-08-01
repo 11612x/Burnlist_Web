@@ -36,18 +36,28 @@ app.use('/api', async (req, res) => {
   }
 });
 
-// Serve static files from the dist directory with cache busting for JS files
+// Serve static files from the dist directory with aggressive cache busting
 app.use(express.static(path.join(__dirname, 'dist'), {
   maxAge: (req, res) => {
-    // Cache JS files for shorter time to ensure updates
+    // No cache for JS files to force updates
     if (req.path.endsWith('.js')) {
-      return '1m'; // 1 minute for JS files
+      return 0; // No cache for JS files
     }
     return '1h'; // 1 hour for other files
   },
-  etag: true,
-  lastModified: true
+  etag: false, // Disable etag for JS files
+  lastModified: false // Disable lastModified for JS files
 }));
+
+// Add cache control headers for JS files
+app.use((req, res, next) => {
+  if (req.path.endsWith('.js')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
 
 // Debug middleware to log requests
 app.use((req, res, next) => {
