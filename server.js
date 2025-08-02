@@ -167,20 +167,58 @@ app.use('/api', async (req, res) => {
         });
       }
     }
+    // Finviz Proxy for Screener
+    else if (pathname === '/finviz-proxy') {
+      const { url } = req.query;
+      
+      if (!url) {
+        return res.status(400).json({ error: 'url parameter is required' });
+      }
+
+      try {
+        console.log(`🔍 Proxy request for URL: ${url}`);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          console.error(`❌ Proxy fetch failed: ${response.status} ${response.statusText}`);
+          return res.status(response.status).json({ 
+            error: 'Proxy fetch failed',
+            status: response.status,
+            statusText: response.statusText
+          });
+        }
+        
+        const csvText = await response.text();
+        console.log(`✅ Proxy success: ${csvText.length} characters`);
+        
+        // Set appropriate headers for CSV
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.send(csvText);
+        
+      } catch (error) {
+        console.error(`❌ Proxy error:`, error);
+        res.status(500).json({ 
+          error: 'Proxy error',
+          details: error.message
+        });
+      }
+    }
     // Health check
     else if (pathname === '/health') {
       res.json({ 
         status: 'ok', 
         timestamp: new Date().toISOString(),
         service: 'burnlist-api',
-        endpoints: ['/twelvedata-historical', '/twelvedata-quote', '/finviz-quote', '/health']
+        endpoints: ['/twelvedata-historical', '/twelvedata-quote', '/finviz-quote', '/finviz-proxy', '/health']
       });
       
     } else {
       res.status(404).json({ 
         error: 'API endpoint not found',
         path: pathname,
-        available: ['/twelvedata-historical', '/twelvedata-quote', '/finviz-quote', '/health']
+        available: ['/twelvedata-historical', '/twelvedata-quote', '/finviz-quote', '/finviz-proxy', '/health']
       });
     }
     

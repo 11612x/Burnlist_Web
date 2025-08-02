@@ -97,21 +97,24 @@ const ScreenerResultsPage = () => {
             logger.debug('Transformed URL (added auth):', transformedUrl);
           }
           
-          const proxyUrl = `http://localhost:3001/api/finviz-proxy?url=${encodeURIComponent(transformedUrl)}`;
+          // Use production API endpoint instead of localhost
+          const proxyUrl = process.env.NODE_ENV === 'production' 
+            ? `/api/finviz-proxy?url=${encodeURIComponent(transformedUrl)}`
+            : `http://localhost:3001/api/finviz-proxy?url=${encodeURIComponent(transformedUrl)}`;
           logger.debug('Using proxy URL:', proxyUrl);
           const proxyResponse = await fetch(proxyUrl);
           
           if (proxyResponse.ok) {
             csvText = await proxyResponse.text();
             success = true;
-            logger.debug('Successfully fetched data via local proxy');
+            logger.debug('Successfully fetched data via proxy');
           } else {
             const errorData = await proxyResponse.json().catch(() => ({}));
             logger.error('Proxy server error:', errorData);
             throw new Error(`Proxy error: ${errorData.error || proxyResponse.statusText}`);
           }
         } catch (proxyError) {
-          logger.debug('Local proxy failed:', proxyError.message);
+          logger.debug('Proxy failed:', proxyError.message);
         }
       }
       
