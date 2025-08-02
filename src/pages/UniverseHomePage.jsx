@@ -7,6 +7,8 @@ import { useTheme, useThemeColor } from '../ThemeContext';
 import { formatDateEuropean } from '../utils/dateUtils';
 import useNotification from '../hooks/useNotification';
 import { logger } from '../utils/logger';
+import logo from '../assets/logo.png';
+import logoblack from '../assets/logoblack.png';
 
 const CRT_GREEN = 'rgb(140,185,162)';
 
@@ -20,7 +22,7 @@ const UniverseHomePage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const { isInverted } = useTheme();
+  const { isInverted, toggleTheme } = useTheme();
   const green = useThemeColor(CRT_GREEN);
   const black = useThemeColor('black');
   const red = useThemeColor('#e31507');
@@ -176,12 +178,61 @@ const UniverseHomePage = () => {
     <div style={{ fontFamily: 'Courier New', color: green, backgroundColor: black, minHeight: '100vh', padding: '0' }}>
       {/* Main Content */}
       <div style={{ padding: '32px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
-          <div>
-            <strong style={{ fontSize: '170%', color: black }}>UNIVERSE SCREENER</strong>
+        {/* Header Section */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          marginBottom: 24,
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'flex-start', 
+            gap: 12
+          }}>
+            <button
+              onClick={toggleTheme}
+              style={{
+                border: 'none',
+                background: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                minHeight: '44px',
+              }}
+              aria-label="Toggle theme"
+            >
+              <img 
+                src={isInverted ? logoblack : logo} 
+                alt="Burnlist Logo" 
+                style={{ 
+                  width: 44, 
+                  height: 44, 
+                  marginRight: 10, 
+                  transition: 'filter 0.3s'
+                }} 
+              />
+            </button>
+            <strong style={{ 
+              fontSize: '170%', 
+              lineHeight: '44px', 
+              display: 'inline-block',
+              color: green,
+              height: '44px'
+            }}>BURNLIST v1.1</strong>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ color: green }}>UNIVERSES: {Object.keys(universes).length}</span>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 10
+          }}>
+            <span style={{ color: red, fontWeight: 'bold', fontSize: 12 }}>0</span>
+            <span style={{ color: green, fontWeight: 'bold', fontSize: 12 }}>0</span>
+            <span style={{ color: green }}>
+              ACCOUNT: local
+            </span>
           </div>
         </div>
 
@@ -197,12 +248,50 @@ const UniverseHomePage = () => {
           marginBottom: '20px'
         }}>
           <CustomButton
+            onClick={() => navigate('/')}
+            style={{
+              background: location.pathname === '/' || location.pathname.startsWith('/burn/') ? CRT_GREEN : 'transparent',
+              color: location.pathname === '/' || location.pathname.startsWith('/burn/') ? '#000000' : CRT_GREEN,
+              border: `1px solid ${CRT_GREEN}`,
+              padding: '9px 18px',
+              fontFamily: "'Courier New', monospace",
+              fontSize: '12px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              minWidth: '80px',
+              textAlign: 'center'
+            }}
+          >
+            BURNPAGE
+          </CustomButton>
+          
+          <CustomButton
+            onClick={() => navigate('/screeners')}
+            style={{
+              background: location.pathname === '/screeners' ? CRT_GREEN : 'transparent',
+              color: location.pathname === '/screeners' ? '#000000' : CRT_GREEN,
+              border: `1px solid ${CRT_GREEN}`,
+              padding: '9px 18px',
+              fontFamily: "'Courier New', monospace",
+              fontSize: '12px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              minWidth: '80px',
+              textAlign: 'center'
+            }}
+          >
+            SCREENERS
+          </CustomButton>
+          
+          <CustomButton
             onClick={() => navigate('/universes')}
             style={{
               background: location.pathname === '/universes' || location.pathname.startsWith('/universe/') ? CRT_GREEN : 'transparent',
               color: location.pathname === '/universes' || location.pathname.startsWith('/universe/') ? '#000000' : CRT_GREEN,
               border: `1px solid ${CRT_GREEN}`,
-              padding: '8px 16px',
+              padding: '9px 18px',
               fontFamily: "'Courier New', monospace",
               fontSize: '12px',
               fontWeight: 'bold',
@@ -221,7 +310,7 @@ const UniverseHomePage = () => {
               background: location.pathname === '/journal' ? CRT_GREEN : 'transparent',
               color: location.pathname === '/journal' ? '#000000' : CRT_GREEN,
               border: `1px solid ${CRT_GREEN}`,
-              padding: '8px 16px',
+              padding: '9px 18px',
               fontFamily: "'Courier New', monospace",
               fontSize: '12px',
               fontWeight: 'bold',
@@ -233,68 +322,9 @@ const UniverseHomePage = () => {
           >
             JOURNAL
           </CustomButton>
-          
-          <CustomButton
-            onClick={() => navigate('/market')}
-            style={{
-              background: location.pathname === '/market' ? CRT_GREEN : 'transparent',
-              color: location.pathname === '/market' ? '#000000' : CRT_GREEN,
-              border: `1px solid ${CRT_GREEN}`,
-              padding: '8px 16px',
-              fontFamily: "'Courier New', monospace",
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              minWidth: '80px',
-              textAlign: 'center'
-            }}
-          >
-            MARKET
-          </CustomButton>
-          
-          <CustomButton
-            onClick={() => navigate('/')}
-            style={{
-              background: location.pathname === '/' || location.pathname.startsWith('/burn/') ? CRT_GREEN : 'transparent',
-              color: location.pathname === '/' || location.pathname.startsWith('/burn/') ? '#000000' : CRT_GREEN,
-              border: `1px solid ${CRT_GREEN}`,
-              padding: '8px 16px',
-              fontFamily: "'Courier New', monospace",
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              minWidth: '80px',
-              textAlign: 'center'
-            }}
-          >
-            BURNPAGE
-          </CustomButton>
         </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <style>
-          {`
-            .clicked-button {
-              background-color: ${black} !important;
-              color: ${green} !important;
-            }
-          `}
-        </style>
-        <CustomButton
-          onClick={() => {
-            setEditMode(!editMode);
-            logger.log('🛠️ Edit mode:', !editMode);
-          }}
-          style={{
-            backgroundColor: editMode ? green : black,
-            color: editMode ? black : green,
-          }}
-        >
-          {editMode ? 'DONE' : 'EDIT'}
-        </CustomButton>
-      </div>
+
 
       {/* Centralized Notification Banner */}
       {notification && (
@@ -332,7 +362,7 @@ const UniverseHomePage = () => {
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(5, 252px)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(252px, 252px))',
         rowGap: '20px',
         columnGap: '20px',
         margin: '70px 0 1px 0',
@@ -374,17 +404,18 @@ const UniverseHomePage = () => {
                   }}
                   style={{
                     fontFamily: 'Courier New',
-                    fontSize: 18,
+                    fontSize: 16,
                     color: green,
-                    background: black,
-                    border: `1px solid ${gray}`,
-                    marginBottom: 4,
+                    background: 'transparent',
+                    border: `1px solid ${green}`,
+                    marginBottom: 2,
                     padding: '2px 4px',
                     width: '100%',
                     fontWeight: 'bold',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
+                    minHeight: '24px'
                   }}
                 />
               ) : (
@@ -397,14 +428,17 @@ const UniverseHomePage = () => {
                 <CustomButton
                   onClick={() => handleDeleteUniverse(universe.id)}
                   style={{
-                    backgroundColor: black,
+                    backgroundColor: 'transparent',
                     color: red,
                     border: `1px solid ${red}`,
-                    padding: '2px 6px',
-                    marginBottom: 4,
-                    fontSize: 10,
+                    padding: '1px 4px',
+                    marginBottom: 2,
+                    fontSize: 9,
                     width: '100%',
-                    fontWeight: 'bold'
+                    fontWeight: 'bold',
+                    fontFamily: 'Courier New',
+                    cursor: 'pointer',
+                    minHeight: '16px'
                   }}
                 >
                   DELETE
@@ -417,16 +451,17 @@ const UniverseHomePage = () => {
                   onChange={e => handleUpdateUniverseReason(universe.id, e.target.value)}
                   style={{
                     fontFamily: 'Courier New',
-                    fontSize: 14,
+                    fontSize: 12,
                     color: green,
-                    background: black,
-                    border: `1px solid ${gray}`,
-                    marginBottom: 4,
+                    background: 'transparent',
+                    border: `1px solid ${green}`,
+                    marginBottom: 2,
                     padding: '2px 4px',
                     width: '100%',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
+                    minHeight: '16px'
                   }}
                   placeholder="Reason..."
                 />
@@ -461,29 +496,135 @@ const UniverseHomePage = () => {
         })}
       </div>
       
-      {/* Create Universe Button */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        marginTop: '20px',
-        marginBottom: '20px'
-      }}>
-        <CustomButton
-          onClick={handleCreateUniverse}
-          className={justClicked ? 'clicked-button' : ''}
-          style={{
-            backgroundColor: green,
-            color: black,
-            transition: 'all 0.2s ease-in-out',
-            padding: '8px 16px',
-            fontSize: '14px',
-            fontWeight: 'bold'
-          }}
-        >
-          +++
-        </CustomButton>
-      </div>
-      </div>
+
+    </div>
+
+    {/* Action Buttons - Bottom Right */}
+    <div className="action-buttons-container">
+      <style>
+        {`
+          .action-buttons-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 8px;
+            z-index: 1000;
+          }
+          
+          @media (max-width: 768px) {
+            .action-buttons-container {
+              position: fixed;
+              top: 50%;
+              right: 10px;
+              transform: translateY(-50%);
+              flex-direction: column;
+              gap: 8px;
+            }
+          }
+          
+          @media (max-width: 480px) {
+            .action-buttons-container {
+              position: fixed;
+              top: 50%;
+              right: 8px;
+              transform: translateY(-50%);
+              flex-direction: column;
+              gap: 6px;
+            }
+          }
+          
+          .action-button {
+            background: ${black};
+            color: ${green};
+            border: 1px solid ${green};
+            font-size: 12px;
+            padding: 6px 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            min-height: 32px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          
+          @media (max-width: 768px) {
+            .action-button {
+              font-size: 10px;
+              padding: 6px 8px;
+              min-height: 32px;
+              width: 60px;
+            }
+          }
+          
+          @media (max-width: 480px) {
+            .action-button {
+              font-size: 9px;
+              padding: 4px 6px;
+              min-height: 28px;
+              width: 50px;
+            }
+          }
+        `}
+      </style>
+      <button
+        onClick={handleCreateUniverse}
+        className="action-button"
+        style={{
+          backgroundColor: green,
+          color: black,
+          fontWeight: 'bold',
+          fontSize: '14px',
+          transition: 'all 0.2s ease-in-out',
+          padding: '8px 16px'
+        }}
+      >
+        +++
+      </button>
+      <button
+        onClick={() => setEditMode(!editMode)}
+        className="action-button"
+        style={{
+          textTransform: 'lowercase',
+          fontWeight: 400,
+          letterSpacing: 1
+        }}
+      >
+        {editMode ? 'done' : 'edit'}
+      </button>
+      <button
+        onClick={() => {
+          // Placeholder for import functionality
+          setNotification('Import functionality coming soon');
+          setNotificationType('info');
+        }}
+        className="action-button"
+        style={{
+          textTransform: 'lowercase',
+          fontWeight: 400,
+          letterSpacing: 1
+        }}
+      >
+        import
+      </button>
+      <button
+        onClick={() => {
+          // Placeholder for export functionality
+          setNotification('Export functionality coming soon');
+          setNotificationType('info');
+        }}
+        className="action-button"
+        style={{
+          textTransform: 'lowercase',
+          fontWeight: 400,
+          letterSpacing: 1
+        }}
+      >
+        export
+      </button>
+    </div>
     </div>
   );
 };

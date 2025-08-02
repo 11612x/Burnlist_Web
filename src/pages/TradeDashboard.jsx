@@ -174,10 +174,10 @@ const TradeDashboard = () => {
         </CustomButton>
         
         <CustomButton
-          onClick={() => navigate('/market')}
-          style={{
-            background: location.pathname === '/market' ? CRT_GREEN : 'transparent',
-            color: location.pathname === '/market' ? '#000000' : CRT_GREEN,
+                      onClick={() => navigate('/screeners')}
+            style={{
+              background: location.pathname === '/screeners' ? CRT_GREEN : 'transparent',
+              color: location.pathname === '/screeners' ? '#000000' : CRT_GREEN,
             border: `1px solid ${CRT_GREEN}`,
             padding: '9px 18px',
             fontFamily: "'Courier New', monospace",
@@ -189,7 +189,7 @@ const TradeDashboard = () => {
             textAlign: 'center'
           }}
         >
-          MARKET
+                      SCREENERS
         </CustomButton>
         
         <CustomButton
@@ -213,7 +213,7 @@ const TradeDashboard = () => {
       </div>
       
       {/* Main Content */}
-      <div style={{ padding: '32px' }}>
+      <div style={{ margin: '70px 0 1px 0' }}>
         {/* Portfolio Bar */}
       <div style={{ ...boxStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 18 }}>
         <div>Total Equity: $100,000</div>

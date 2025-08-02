@@ -1,9 +1,11 @@
 import { useMemo, useRef, useEffect } from 'react';
 import { getAverageReturn } from '@logic/portfolioUtils';
 import returnCalculator from '../data/returnCalculator';
+import navCalculator from '../data/navCalculator';
 import { logger } from '../utils/logger';
 
 // Hook to calculate the average return (%) across a list of normalized ticker items
+// UPDATED: Now uses NEW NAV calculator with fallback to old system
 export function useAverageReturn(items, timeframe = 'MAX') {
   const hasMounted = useRef(false);
 
@@ -60,7 +62,21 @@ export function useAverageReturn(items, timeframe = 'MAX') {
 
     logger.debug(`Proceeding with ${validItems.length} valid items (filtered ${items.length - validItems.length})`);
 
-    // Use the new timeframe-based return calculator
+    // NEW NAV CALCULATION: Try NAV calculator first
+    try {
+      const navData = navCalculator.calculateNAVPerformance(validItems, timeframe);
+      
+      if (navData && navData.length > 0) {
+        const latestNav = navData[navData.length - 1];
+        const displayReturn = parseFloat(latestNav.returnPercent.toFixed(2));
+        logger.debug(`NEW NAV useAverageReturn result (${timeframe}): ${displayReturn}%`);
+        return Number.isFinite(displayReturn) ? displayReturn : 0;
+      }
+    } catch (error) {
+      logger.error('Error in NEW NAV calculation, falling back to old method:', error);
+    }
+
+    // FALLBACK: Use the old timeframe-based return calculator
     const averageReturn = returnCalculator.calculateWatchlistReturn(validItems, timeframe);
     
     if (averageReturn === null) {
@@ -70,7 +86,7 @@ export function useAverageReturn(items, timeframe = 'MAX') {
 
     // Display with 2 decimal places as per user preference  
     const displayReturn = parseFloat(averageReturn.toFixed(2));
-    logger.debug(`useAverageReturn result (${timeframe}): ${displayReturn}%`);
+    logger.debug(`FALLBACK useAverageReturn result (${timeframe}): ${displayReturn}%`);
     
     return Number.isFinite(displayReturn) ? displayReturn : 0;
   }, [items, timeframe, items.map(item => item.buyPrice).join(','), JSON.stringify({ timeframe, itemsLength: items.length })]); // More comprehensive dependency

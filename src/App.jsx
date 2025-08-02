@@ -13,7 +13,8 @@ import UniverseHomePage from "@pages/UniverseHomePage";
 import TradeDashboard from './pages/TradeDashboard';
 import TradeJournal from './pages/TradeJournal';
 import AddStockPricePage from './pages/AddStockPricePage';
-import MarketPage from './pages/MarketPage';
+import ScreenersPage from './pages/ScreenersPage';
+import ScreenerResultsPage from './pages/ScreenerResultsPage';
 // Fetch manager for cleanup
 import { fetchManager } from '@data/twelvedataFetchManager';
 import { ThemeProvider } from './ThemeContext';
@@ -65,7 +66,8 @@ function App() {
           <Route path="/trade" element={<TradeDashboard />} />
           <Route path="/journal" element={<TradeJournal />} />
           <Route path="/add-stock-price" element={<AddStockPricePage />} />
-          <Route path="/market" element={<MarketPage />} />
+          <Route path="/screeners" element={<ScreenersPage />} />
+          <Route path="/screeners/screener/:screenerSlug" element={<ScreenerResultsPage />} />
         </Routes>
         <MobileNavigation />
       </Router>

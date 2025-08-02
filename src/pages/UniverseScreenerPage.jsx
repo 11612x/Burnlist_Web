@@ -15,11 +15,13 @@ import redFlag from '../assets/redflag.png';
 import yellowFlag from '../assets/yellowflag.png';
 import box from '../assets/box.png';
 import checkbox from '../assets/checkbox.png';
+import execute from '../assets/excecute.png';
 import { formatDateEuropean } from '../utils/dateUtils';
 import useNotification from '../hooks/useNotification';
 import { getCachedExchange } from '../utils/exchangeDetector';
 
 const CRT_GREEN = 'rgb(140,185,162)';
+const gray = '#888';
 
 // Setup configurations with their specific checklists
 const SETUP_CONFIGS = {
@@ -164,7 +166,6 @@ const UniverseScreenerPage = () => {
   const [riskPerTrade, setRiskPerTrade] = useState("2");
   const [overrideReason, setOverrideReason] = useState("");
   const [editMode, setEditMode] = useState(false);
-  const [selectedRows, setSelectedRows] = useState(new Set());
   const [currentMarketPrice, setCurrentMarketPrice] = useState(null);
   const [isFetchingPrice, setIsFetchingPrice] = useState(false);
 
@@ -358,30 +359,13 @@ const UniverseScreenerPage = () => {
     }
   };
 
-  const handleSelectRow = (id) => {
-    setSelectedRows(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
-  };
-  const handleSelectAllRows = () => {
-    if (selectedRows.size === (universe?.items?.length || 0)) {
-      setSelectedRows(new Set());
-    } else {
-      setSelectedRows(new Set((universe?.items || []).map(item => item.id)));
-    }
-  };
+
   const handleMassDelete = () => {
     setUniverse(prev => ({
       ...prev,
-      items: (prev?.items || []).filter(item => !selectedRows.has(item.id))
+      items: (prev?.items || []).filter(item => !selectedItems.has(item.id))
     }));
-    setSelectedRows(new Set());
+    setSelectedItems(new Set());
   };
 
   const handleCreateWatchlist = async () => {
@@ -502,7 +486,7 @@ const UniverseScreenerPage = () => {
         debtEquity: item.debtEquity || 0.25,
         pb: item.pb || 1.1,
         beta: item.beta || 1.5,
-        newsFlag: item.flags.news || false,
+        newsFlag: item.flags?.news || false,
         sectorAlignment: item.sectorAlignment || false,
         marketSupport: item.marketSupport || false,
         volatilityClear: item.volatilityClear || false,
@@ -852,9 +836,9 @@ const UniverseScreenerPage = () => {
   };
 
   const handleQuickTradeTypeChange = (itemId, tradeType) => {
-    setUniverse(prev => ({
-      ...prev,
-      items: (prev?.items || []).map(item => 
+    console.log(`Setting trade type for item ${itemId} to ${tradeType}`);
+    setUniverse(prev => {
+      const updatedItems = (prev?.items || []).map(item => 
         item.id === itemId 
           ? { 
               ...item, 
@@ -862,12 +846,17 @@ const UniverseScreenerPage = () => {
               quickTradeTypeName: tradeType ? SETUP_CONFIGS[tradeType]?.name || tradeType : ""
             }
           : item
-      )
-    }));
+      );
+      console.log(`Updated items:`, updatedItems.map(item => ({ id: item.id, quickTradeType: item.quickTradeType })));
+      return {
+        ...prev,
+        items: updatedItems
+      };
+    });
   };
 
   const handleMassQuickTradeTypeChange = (tradeType) => {
-    if (selectedRows.size === 0) {
+    if (selectedItems.size === 0) {
       setNotification("Please select at least one stock first");
       setNotificationType("error");
       return;
@@ -876,7 +865,7 @@ const UniverseScreenerPage = () => {
     setUniverse(prev => ({
       ...prev,
       items: (prev?.items || []).map(item => 
-        selectedRows.has(item.id)
+        selectedItems.has(item.id)
           ? { 
               ...item, 
               quickTradeType: tradeType,
@@ -886,7 +875,7 @@ const UniverseScreenerPage = () => {
       )
     }));
 
-    setNotification(`Set ${selectedRows.size} stocks to ${SETUP_CONFIGS[tradeType]?.name || tradeType}`);
+    setNotification(`Set ${selectedItems.size} stocks to ${SETUP_CONFIGS[tradeType]?.name || tradeType}`);
     setNotificationType("success");
   };
 
@@ -895,17 +884,10 @@ const UniverseScreenerPage = () => {
     if (!symbol) return;
     
     try {
-      // Get the correct exchange for this symbol
-      const exchange = await getCachedExchange(symbol);
-      const encodedSymbol = encodeURIComponent(`${exchange}:${symbol.toUpperCase()}`);
-      const chartUrl = `https://www.tradingview.com/chart/i0seCgVv/?symbol=${encodedSymbol}`;
+      const chartUrl = `https://elite.finviz.com/charts?t=${symbol.toUpperCase()}&p=d&l=1h1v`;
       window.open(chartUrl, '_blank');
     } catch (error) {
       logger.warn(`⚠️ Error opening chart for ${symbol}:`, error);
-      // Fallback to NASDAQ if there's an error
-      const encodedSymbol = encodeURIComponent(`NASDAQ:${symbol.toUpperCase()}`);
-      const chartUrl = `https://www.tradingview.com/chart/i0seCgVv/?symbol=${encodedSymbol}`;
-      window.open(chartUrl, '_blank');
     }
   };
 
@@ -961,10 +943,10 @@ const UniverseScreenerPage = () => {
         </CustomButton>
         
         <CustomButton
-          onClick={() => navigate('/market')}
-          style={{
-            background: location.pathname === '/market' ? CRT_GREEN : 'transparent',
-            color: location.pathname === '/market' ? '#000000' : CRT_GREEN,
+                      onClick={() => navigate('/screeners')}
+            style={{
+              background: location.pathname === '/screeners' ? CRT_GREEN : 'transparent',
+              color: location.pathname === '/screeners' ? '#000000' : CRT_GREEN,
             border: `1px solid ${CRT_GREEN}`,
             padding: '9px 18px',
             fontFamily: "'Courier New', monospace",
@@ -976,7 +958,7 @@ const UniverseScreenerPage = () => {
             textAlign: 'center'
           }}
         >
-          MARKET
+                      SCREENERS
         </CustomButton>
         
         <CustomButton
@@ -1101,107 +1083,209 @@ const UniverseScreenerPage = () => {
   </div>
 )}
       <table style={{
-        width: "100%",
-        borderCollapse: "separate",
-        borderSpacing: 0,
-        color: CRT_GREEN,
-        background: 'black',
-        fontFamily: 'Courier New',
-        border: `2px solid ${CRT_GREEN}`,
-        fontSize: "15px",
-        boxShadow: `0 2px 16px 0 rgba(140,185,162,0.08)`,
-        tableLayout: "fixed"
+        width: '100%',
+        borderCollapse: 'collapse',
+        fontSize: '14.5px'
       }}>
-                     <thead style={{ position: 'sticky', top: 0, zIndex: 5, background: 'black', borderBottom: `2px solid ${CRT_GREEN}` }}>
-           <tr style={{ borderBottom: `2px solid ${CRT_GREEN}` }}>
-             <th style={{ width: "7.14%", padding: "8px", textAlign: "center", borderBottom: `1px solid ${CRT_GREEN}`, background: 'black' }}>
-               {editMode ? (
-        <input
-          type="checkbox"
-          checked={selectedRows.size === (universe?.items?.length || 0) && (universe?.items?.length || 0) > 0}
-          onChange={handleSelectAllRows}
-          style={{ accentColor: CRT_GREEN }}
-        />
-      ) : (
-        <input
-          type="checkbox"
-          checked={selectedItems.size === (universe?.items?.length || 0) && (universe?.items?.length || 0) > 0}
-          onChange={handleSelectAll}
-          style={{ accentColor: CRT_GREEN }}
-        />
-      )}
-      ) : null}
+                     <thead>
+           <tr>
+             <th style={{ padding: '6px', textAlign: "center", borderBottom: `2px solid ${CRT_GREEN}`, background: 'black' }}>
+               <img
+                 src={selectedItems.size === (universe?.items?.length || 0) && (universe?.items?.length || 0) > 0 ? checkbox : box}
+                 alt="Select All"
+                 onClick={(e) => {
+                   e.stopPropagation();
+                   handleSelectAll();
+                 }}
+                 style={{ 
+                   width: 16, 
+                   height: 16, 
+                   cursor: 'pointer',
+                   filter: 'drop-shadow(0 0 2px rgba(140,185,162,0.3))'
+                 }}
+               />
              </th>
              <th 
                onClick={() => handleSort("symbol")} 
-               style={{ width: "7.14%", padding: "8px", textAlign: "left", borderBottom: `1px solid ${CRT_GREEN}`, background: 'black', cursor: "pointer" }}
+               style={{ 
+                 cursor: 'pointer',
+                 padding: '12px 8px', 
+                 textAlign: "left", 
+                 borderBottom: `2px solid ${CRT_GREEN}`, 
+                 color: CRT_GREEN,
+                 fontWeight: 'bold',
+                 fontSize: '14.5px',
+                 userSelect: 'none',
+                 transition: 'background-color 0.2s'
+               }}
              >
                Symbol {renderSortArrow("symbol")}
              </th>
              <th 
                onClick={() => handleSort("tradeType")} 
-               style={{ width: "7.14%", padding: "8px", textAlign: "center", borderBottom: `1px solid ${CRT_GREEN}`, background: 'black', fontSize: 15, cursor: "pointer" }}
+               style={{ 
+                 cursor: 'pointer',
+                 padding: '12px 8px', 
+                 textAlign: "center", 
+                 borderBottom: `2px solid ${CRT_GREEN}`, 
+                 color: CRT_GREEN,
+                 fontWeight: 'bold',
+                 fontSize: '14.5px',
+                 userSelect: 'none',
+                 transition: 'background-color 0.2s'
+               }}
              >
                Trade Type {renderSortArrow("tradeType")}
              </th>
              <th 
-               onClick={() => handleSort("quickTradeType")} 
-               style={{ width: "7.14%", padding: "8px", textAlign: "center", borderBottom: `1px solid ${CRT_GREEN}`, background: 'black', fontSize: 15, cursor: "pointer" }}
-             >
-               Quick Type {renderSortArrow("quickTradeType")}
-             </th>
-             <th 
                onClick={() => handleSort("lastPrice")} 
-               style={{ width: "7.14%", padding: "8px", textAlign: "right", borderBottom: `1px solid ${CRT_GREEN}`, background: 'black', cursor: "pointer" }}
+               style={{ 
+                 cursor: 'pointer',
+                 padding: '12px 8px', 
+                 textAlign: "right", 
+                 borderBottom: `2px solid ${CRT_GREEN}`, 
+                 color: CRT_GREEN,
+                 fontWeight: 'bold',
+                 fontSize: '14.5px',
+                 userSelect: 'none',
+                 transition: 'background-color 0.2s'
+               }}
              >
                Last Price {renderSortArrow("lastPrice")}
              </th>
              <th 
                onClick={() => handleSort("tradeType")} 
-               style={{ width: "7.14%", padding: '2px 4px', textAlign: 'center', borderBottom: `1px solid ${CRT_GREEN}`, background: 'black', fontSize: 15, cursor: "pointer" }}
+               style={{ 
+                 cursor: 'pointer',
+                 padding: '12px 8px', 
+                 textAlign: 'center', 
+                 borderBottom: `2px solid ${CRT_GREEN}`, 
+                 color: CRT_GREEN,
+                 fontWeight: 'bold',
+                 fontSize: '14.5px',
+                 userSelect: 'none',
+                 transition: 'background-color 0.2s'
+               }}
              >
                SETUP {renderSortArrow("tradeType")}
              </th>
              <th 
                onClick={() => handleSort("flags.news")} 
-               style={{ width: "7.14%", padding: '2px 4px', textAlign: 'center', borderBottom: `1px solid ${CRT_GREEN}`, background: 'black', fontSize: 15, cursor: "pointer" }}
+               style={{ 
+                 padding: '12px 8px', 
+                 textAlign: 'center', 
+                 borderBottom: `2px solid ${CRT_GREEN}`, 
+                 color: CRT_GREEN,
+                 fontWeight: 'bold',
+                 fontSize: '14.5px',
+                 userSelect: 'none',
+                 transition: 'background-color 0.2s',
+                 cursor: "pointer" 
+               }}
              >
                NEWS {renderSortArrow("flags.news")}
              </th>
              <th 
                onClick={() => handleSort("journalVerdict")} 
-               style={{ width: "7.14%", padding: '2px 4px', textAlign: 'center', borderBottom: `1px solid ${CRT_GREEN}`, background: 'black', fontSize: 15, cursor: "pointer" }}
+               style={{ 
+                 padding: '12px 8px', 
+                 textAlign: 'center', 
+                 borderBottom: `2px solid ${CRT_GREEN}`, 
+                 color: CRT_GREEN,
+                 fontWeight: 'bold',
+                 fontSize: '14.5px',
+                 userSelect: 'none',
+                 transition: 'background-color 0.2s',
+                 cursor: "pointer" 
+               }}
              >
                VERDICT {renderSortArrow("journalVerdict")}
              </th>
-             <th onClick={() => handleSort("entryPrice")} style={{ width: "7.14%", padding: "8px", textAlign: "right", borderBottom: `1px solid ${CRT_GREEN}`, background: 'black', cursor: "pointer" }}>
+             <th onClick={() => handleSort("entryPrice")} style={{ 
+               padding: '12px 8px', 
+               textAlign: "right", 
+               borderBottom: `2px solid ${CRT_GREEN}`, 
+               color: CRT_GREEN,
+               fontWeight: 'bold',
+               fontSize: '14.5px',
+               userSelect: 'none',
+               transition: 'background-color 0.2s',
+               cursor: "pointer" 
+             }}>
                Entry Price {renderSortArrow("entryPrice")}
              </th>
              <th 
                onClick={() => handleSort("stopLoss")} 
-               style={{ width: "7.14%", padding: "8px", textAlign: "right", borderBottom: `1px solid ${CRT_GREEN}`, background: 'black', fontSize: 15, cursor: "pointer" }}
+               style={{ 
+                 padding: '12px 8px', 
+                 textAlign: "right", 
+                 borderBottom: `2px solid ${CRT_GREEN}`, 
+                 color: CRT_GREEN,
+                 fontWeight: 'bold',
+                 fontSize: '14.5px',
+                 userSelect: 'none',
+                 transition: 'background-color 0.2s',
+                 cursor: "pointer" 
+               }}
              >
                SL {renderSortArrow("stopLoss")}
              </th>
              <th 
                onClick={() => handleSort("takeProfit")} 
-               style={{ width: "7.14%", padding: "8px", textAlign: "right", borderBottom: `1px solid ${CRT_GREEN}`, background: 'black', fontSize: 15, cursor: "pointer" }}
+               style={{ 
+                 padding: '12px 8px', 
+                 textAlign: "right", 
+                 borderBottom: `2px solid ${CRT_GREEN}`, 
+                 color: CRT_GREEN,
+                 fontWeight: 'bold',
+                 fontSize: '14.5px',
+                 userSelect: 'none',
+                 transition: 'background-color 0.2s',
+                 cursor: "pointer" 
+               }}
              >
                TP {renderSortArrow("takeProfit")}
              </th>
              <th 
                onClick={() => handleSort("positionSize")} 
-               style={{ width: "7.14%", padding: "8px", textAlign: "right", borderBottom: `1px solid ${CRT_GREEN}`, background: 'black', fontSize: 15, cursor: "pointer" }}
+               style={{ 
+                 padding: '12px 8px', 
+                 textAlign: "right", 
+                 borderBottom: `2px solid ${CRT_GREEN}`, 
+                 color: CRT_GREEN,
+                 fontWeight: 'bold',
+                 fontSize: '14.5px',
+                 userSelect: 'none',
+                 transition: 'background-color 0.2s',
+                 cursor: "pointer" 
+               }}
              >
                Position {renderSortArrow("positionSize")}
              </th>
              <th 
                onClick={() => handleSort("notes")} 
-               style={{ width: "7.14%", padding: "8px", textAlign: "left", borderBottom: `1px solid ${CRT_GREEN}`, background: 'black', fontSize: 15, cursor: "pointer" }}
+               style={{ 
+                 padding: '12px 8px', 
+                 textAlign: "left", 
+                 borderBottom: `2px solid ${CRT_GREEN}`, 
+                 color: CRT_GREEN,
+                 fontWeight: 'bold',
+                 fontSize: '14.5px',
+                 userSelect: 'none',
+                 transition: 'background-color 0.2s',
+                 cursor: "pointer" 
+               }}
              >
                Notes {renderSortArrow("notes")}
              </th>
-             <th style={{ width: "7.14%", padding: "8px", textAlign: "center", borderBottom: `1px solid ${CRT_GREEN}`, background: 'black', fontSize: 15 }}>Execute</th>
+             <th style={{ 
+               padding: '12px 8px', 
+               textAlign: "center", 
+               borderBottom: `2px solid ${CRT_GREEN}`, 
+               color: CRT_GREEN,
+               fontWeight: 'bold',
+               fontSize: '14.5px'
+             }}>Execute</th>
 
            </tr>
          </thead>
@@ -1210,43 +1294,40 @@ const UniverseScreenerPage = () => {
             <tr
               key={item.id}
               style={{
-                borderBottom: `1px solid ${CRT_GREEN}`,
-                background: (idx % 2 === 0 ? '#0a0a0a' : '#181818'),
-                transition: 'background 0.2s',
-                boxShadow: 'none',
-                outline: 'none',
-                cursor: 'pointer',
+                borderBottom: `1px solid ${gray}`,
+                ':hover': {
+                  backgroundColor: 'rgba(140,185,162,0.05)'
+                }
               }}
-              onMouseEnter={e => e.currentTarget.style.background = '#232323'}
-              onMouseLeave={e => e.currentTarget.style.background = (idx % 2 === 0 ? '#0a0a0a' : '#181818')}
               onClick={e => {
                 // Prevent row click from triggering when clicking edit/done or delete buttons or checkboxes/inputs
                 if (
                   e.target.closest('button') ||
                   e.target.tagName === 'BUTTON' ||
-                  e.target.closest('input')
+                  e.target.closest('input') ||
+                  e.target.tagName === 'IMG' ||
+                  e.target.closest('select')
                 ) return;
                 handleJournalClick(item);
               }}
             >
-              <td style={{ width: "7.14%", padding: "8px", textAlign: "center" }}>
-                {editMode ? (
-          <input
-            type="checkbox"
-            checked={selectedRows.has(item.id)}
-            onChange={() => handleSelectRow(item.id)}
-            style={{ accentColor: CRT_GREEN }}
+              <td style={{ padding: '6px', textAlign: "center" }}>
+          <img
+            src={selectedItems.has(item.id) ? checkbox : box}
+            alt="Select Item"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSelectItem(item.id);
+            }}
+            style={{ 
+              width: 16, 
+              height: 16, 
+              cursor: 'pointer',
+              filter: 'drop-shadow(0 0 2px rgba(140,185,162,0.3))'
+            }}
           />
-        ) : (
-          <input
-            type="checkbox"
-            checked={selectedItems.has(item.id)}
-            onChange={() => handleSelectItem(item.id)}
-            style={{ accentColor: CRT_GREEN }}
-          />
-        )}
               </td>
-              <td style={{ width: "7.14%", padding: "8px", textAlign: "left" }}>
+              <td style={{ padding: '6px', textAlign: "left" }}>
                 <span
                   onClick={(e) => {
                     e.stopPropagation(); // Prevent row click
@@ -1260,7 +1341,7 @@ const UniverseScreenerPage = () => {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
-                    textDecoration: 'underline'
+                    fontWeight: 'bold'
                   }}
                   title={`Click to open ${item.symbol} chart in new tab`}
                 >
@@ -1268,17 +1349,15 @@ const UniverseScreenerPage = () => {
                   <img src={greenFlag} alt="Open Chart" style={{ width: 12, height: 12, verticalAlign: 'middle' }} />
                 </span>
               </td>
-              <td 
-                style={{ width: "7.14%", padding: "8px", textAlign: "center", cursor: editMode ? "pointer" : "default" }}
-                onClick={editMode ? () => {
-                  const select = document.querySelector(`select[data-item-id="${item.id}"][data-field="tradeType"]`);
-                  if (select) select.focus();
-                } : undefined}
-              >
+              <td style={{ padding: '6px', textAlign: "center" }}>
                 {editMode ? (
                   <select
-                    value={item.tradeType || ""}
-                    onChange={(e) => handleItemChange(item.id, 'tradeType', e.target.value)}
+                    value={item.quickTradeType || item.tradeType || ""}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      const value = e.target.value;
+                      handleQuickTradeTypeChange(item.id, value);
+                    }}
                     data-item-id={item.id}
                     data-field="tradeType"
                     style={{
@@ -1287,7 +1366,8 @@ const UniverseScreenerPage = () => {
                       border: `1px solid ${CRT_GREEN}`,
                       padding: '2px 4px',
                       fontFamily: 'Courier New',
-                      fontSize: 12
+                      fontSize: 12,
+                      width: '100%'
                     }}
                   >
                     <option value="">Select</option>
@@ -1297,46 +1377,40 @@ const UniverseScreenerPage = () => {
                     <option value="postEarnings">Post-Earnings</option>
                   </select>
                 ) : (
-                  <span style={{ fontSize: 14 }}>
-                    {item.tradeTypeName || '-'}
-                  </span>
+                  <select
+                    value={item.quickTradeType || item.tradeType || ""}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      const value = e.target.value;
+                      handleQuickTradeTypeChange(item.id, value);
+                    }}
+                    style={{
+                      background: 'transparent',
+                      color: CRT_GREEN,
+                      border: 'none',
+                      borderBottom: `1px solid ${CRT_GREEN}`,
+                      padding: '1px 2px',
+                      fontFamily: 'Courier New',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      borderRadius: 0,
+                      width: '100%',
+                      textAlign: 'center',
+                      height: '18px',
+                      outline: 'none'
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <option value="">-</option>
+                    <option value="breakout">Breakout</option>
+                    <option value="pullback">Pullback</option>
+                    <option value="shortSqueeze">Short Squeeze</option>
+                    <option value="postEarnings">Post-Earnings</option>
+                  </select>
                 )}
               </td>
-              <td style={{ width: "7.14%", padding: "8px", textAlign: "center" }}>
-                <select
-                  value={item.quickTradeType || ""}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    handleQuickTradeTypeChange(item.id, e.target.value);
-                  }}
-                  style={{
-                    background: 'transparent',
-                    color: CRT_GREEN,
-                    border: 'none',
-                    borderBottom: `1px solid ${CRT_GREEN}`,
-                    padding: '1px 2px',
-                    fontFamily: 'Courier New',
-                    fontSize: 14,
-                    cursor: 'pointer',
-                    borderRadius: 0,
-                    width: '90%',
-                    textAlign: 'center',
-                    height: '20px',
-                    minHeight: '20px',
-                    outline: 'none'
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <option value="">-</option>
-                  {Object.keys(SETUP_CONFIGS).map(tradeType => (
-                    <option key={tradeType} value={tradeType}>
-                      {SETUP_CONFIGS[tradeType].name}
-                    </option>
-                  ))}
-                </select>
-              </td>
                             <td 
-                              style={{ width: "7.14%", padding: "8px", textAlign: "right", cursor: editMode ? "text" : "default" }}
+                              style={{ padding: '6px', textAlign: "right", cursor: editMode ? "text" : "default" }}
                               onClick={editMode ? () => {
                                 const input = document.querySelector(`input[data-item-id="${item.id}"][data-field="lastPrice"]`);
                                 if (input) input.focus();
@@ -1371,25 +1445,25 @@ const UniverseScreenerPage = () => {
                 <img src={item.tradeType ? greenFlag : redFlag} alt="SETUP" title={item.tradeTypeName || "No setup selected"} style={{ width: 13, height: 13, verticalAlign: 'middle', filter: 'drop-shadow(0 0 1px #222)' }} />
               </td>
               <td style={{ width: "7.14%", padding: '2px 4px', textAlign: 'center' }}>
-                <img src={item.flags.news || item.newsFlag ? greenFlag : redFlag} alt="NEWS" title="NEWS" style={{ width: 13, height: 13, verticalAlign: 'middle', filter: 'drop-shadow(0 0 1px #222)' }} />
+                <img src={item.flags?.news || item.newsFlag ? greenFlag : redFlag} alt="NEWS" title="NEWS" style={{ width: 13, height: 13, verticalAlign: 'middle', filter: 'drop-shadow(0 0 1px #222)' }} />
               </td>
               <td style={{ width: "7.14%", padding: '2px 4px', textAlign: 'center' }}>
                 <img src={item.journalVerdictFlag || redFlag} alt="VERDICT" title={item.journalVerdict || "Not journaled"} style={{ width: 13, height: 13, verticalAlign: 'middle', filter: 'drop-shadow(0 0 1px #222)' }} />
               </td>
-              <td style={{ width: "7.14%", padding: "8px", textAlign: "right" }}>
+              <td style={{ padding: '6px', textAlign: "right" }}>
                 {item.entryPrice !== undefined && item.entryPrice !== null ? item.entryPrice : '-'}
               </td>
-              <td style={{ width: "7.14%", padding: "8px", textAlign: "right" }}>
+              <td style={{ padding: '6px', textAlign: "right" }}>
                 {item.stopLoss ? `$${item.stopLoss}` : '-'}
               </td>
-              <td style={{ width: "7.14%", padding: "8px", textAlign: "right" }}>
+              <td style={{ padding: '6px', textAlign: "right" }}>
                 {item.target ? `$${item.target}` : (item.takeProfit ? `$${item.takeProfit}` : '-')}
               </td>
-              <td style={{ width: "7.14%", padding: "8px", textAlign: "right" }}>
+              <td style={{ padding: '6px', textAlign: "right" }}>
                 {item.positionSize ? item.positionSize : '-'}
               </td>
               <td 
-                style={{ width: "7.14%", padding: "8px", textAlign: "left", cursor: editMode ? "text" : "default" }}
+                style={{ padding: '6px', textAlign: "left", cursor: editMode ? "text" : "default" }}
                 onClick={editMode ? () => {
                   const input = document.querySelector(`input[data-item-id="${item.id}"][data-field="notes"]`);
                   if (input) input.focus();
@@ -1441,32 +1515,21 @@ const UniverseScreenerPage = () => {
                   </span>
                 )}
               </td>
-              <td style={{ width: "7.14%", padding: "8px", textAlign: "center" }}>
-                <button
+              <td style={{ padding: '6px', textAlign: "center" }}>
+                <img
+                  src={execute}
+                  alt="Execute Trade"
                   onClick={() => handleExecuteTrade(item)}
-                  disabled={!item.tradeType || !item.entryPrice || !item.stopLoss || !item.target}
                   style={{
-                    background: (!item.tradeType || !item.entryPrice || !item.stopLoss || !item.target) ? '#222' : CRT_GREEN,
-                    color: (!item.tradeType || !item.entryPrice || !item.stopLoss || !item.target) ? CRT_GREEN : 'black',
-                    border: `1px solid ${CRT_GREEN}`,
-                    borderRadius: 0,
-                    padding: '6px 12px',
-                    fontFamily: "'Courier New', monospace",
-                    fontWeight: 700,
-                    fontSize: 14,
+                    width: 24,
+                    height: 24,
                     cursor: (!item.tradeType || !item.entryPrice || !item.stopLoss || !item.target) ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s',
-                    minWidth: 60,
-                    height: '32px',
-                    minHeight: '32px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
+                    opacity: (!item.tradeType || !item.entryPrice || !item.stopLoss || !item.target) ? 0.3 : 1,
+                    filter: 'drop-shadow(0 0 2px rgba(140,185,162,0.3))',
+                    transition: 'all 0.2s'
                   }}
                   title={(!item.tradeType || !item.entryPrice || !item.stopLoss || !item.target) ? "Complete journal entry first" : "Execute trade"}
-                >
-                  EXECUTE
-                </button>
+                />
               </td>
             </tr>
           ))}
@@ -1581,7 +1644,7 @@ const UniverseScreenerPage = () => {
                     marginBottom: '20px'
                   }}>
                     {SETUP_CONFIGS[selectedTradeType].checklists.map((item, index) => (
-                      <label key={index} style={{ 
+                      <label key={`checklist-${item}`} style={{ 
                         display: 'flex', 
                         alignItems: 'center', 
                         gap: '10px',
@@ -1620,7 +1683,7 @@ const UniverseScreenerPage = () => {
                       background: 'rgba(140,185,162,0.04)'
                     }}>
                       {SETUP_CONFIGS[selectedTradeType].newsValidation.map((item, index) => (
-                        <label key={index} style={{ 
+                        <label key={`news-${item}`} style={{ 
                           display: 'flex', 
                           alignItems: 'center', 
                           gap: '10px',

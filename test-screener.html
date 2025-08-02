@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screener Test</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: black;
+            color: rgb(140,185,162);
+            padding: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            border: 1px solid rgb(140,185,162);
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .csv-output {
+            background-color: #111;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+        button {
+            background-color: rgb(140,185,162);
+            color: black;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+        button:hover {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <h1>Screener Test Page</h1>
+    
+    <div class="test-section">
+        <h2>Sample CSV Data</h2>
+        <p>This is the expected format for Finviz CSV export:</p>
+        <div class="csv-output">
+No.,Ticker,Company,Sector,Industry,Country,Market Cap,P/E,Price,Change,Volume
+1,AAPL,Apple Inc.,Technology,Consumer Electronics,USA,"$2,500.00B",25.5,"$150.25","+2.5%","50,000,000"
+2,MSFT,Microsoft Corporation,Technology,Software,USA,"$2,200.00B",30.2,"$320.10","+1.8%","35,000,000"
+3,GOOGL,Alphabet Inc.,Technology,Internet Content & Information,USA,"$1,800.00B",28.7,"$2,850.75","-0.5%","15,000,000"
+4,AMZN,Amazon.com Inc.,Consumer Cyclical,Internet Retail,USA,"$1,600.00B",45.2,"$3,200.50","+3.2%","25,000,000"
+5,TSLA,Tesla Inc.,Consumer Cyclical,Auto Manufacturers,USA,"$800.00B",75.8,"$250.00","-1.2%","40,000,000"
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Screener Creation</h2>
+        <p>To test the screener functionality:</p>
+        <ol>
+            <li>Go to the Market page in your app</li>
+            <li>Click "ADD SCREENER"</li>
+            <li>Enter a name like "Test Screener"</li>
+            <li>For the API link, you can use a sample Finviz URL or create a test endpoint</li>
+            <li>Add some notes</li>
+            <li>Save the screener</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>Expected Features</h2>
+        <ul>
+            <li>✅ Screener cards display on Market page</li>
+            <li>✅ Add/Edit/Delete screener functionality</li>
+            <li>✅ Click screener card to view results</li>
+            <li>✅ Sortable table with columns: Ticker, Company, Price, Change, Volume, P/E, Market Cap, Sector, Country</li>
+            <li>✅ Refresh button to reload data</li>
+            <li>✅ Error handling for failed API calls</li>
+            <li>✅ Loading states and notifications</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Sample Finviz URLs</h2>
+        <p>Here are some example Finviz screener URLs you can test with:</p>
+        <ul>
+            <li><code>https://finviz.com/screener.ashx?v=111&f=cap_large&o=change</code> - Large cap stocks</li>
+            <li><code>https://finviz.com/screener.ashx?v=111&f=sec_technology&o=change</code> - Technology sector</li>
+            <li><code>https://finviz.com/screener.ashx?v=111&f=fa_pe_u20&o=change</code> - P/E under 20</li>
+        </ul>
+        <p><strong>Note:</strong> You'll need to add <code>&export=csv</code> to the end of these URLs to get CSV format.</p>
+    </div>
+
+    <script>
+        // Test CSV parsing function
+        function testCSVParsing() {
+            const sampleCSV = `No.,Ticker,Company,Sector,Industry,Country,Market Cap,P/E,Price,Change,Volume
+1,AAPL,Apple Inc.,Technology,Consumer Electronics,USA,"$2,500.00B",25.5,"$150.25","+2.5%","50,000,000"
+2,MSFT,Microsoft Corporation,Technology,Software,USA,"$2,200.00B",30.2,"$320.10","+1.8%","35,000,000"`;
+            
+            const lines = sampleCSV.trim().split('\n');
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            
+            const parsed = lines.slice(1).map(line => {
+                const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+                const row = {};
+                headers.forEach((header, index) => {
+                    row[header] = values[index] || '';
+                });
+                return row;
+            });
+            
+            console.log('Parsed CSV data:', parsed);
+            return parsed;
+        }
+        
+        // Run test
+        testCSVParsing();
+    </script>
+</body>
+</html> 

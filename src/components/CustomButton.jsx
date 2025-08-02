@@ -13,10 +13,6 @@ const CustomButton = ({ children, onClick, type = 'button', style = {}, disabled
     padding: '12px 16px',
     borderRadius: '0',
     transition: 'all 0.2s ease',
-    ':active': {
-      backgroundColor: fg,
-      color: bg,
-    }
   } : {};
   
   return (

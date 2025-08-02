@@ -8,7 +8,7 @@ const TimeframeSelector = ({ selected, onChange }) => {
   const black = useThemeColor('black');
   return (
     <div style={{ marginTop: 10, marginBottom: 10, display: "flex", gap: 12, alignItems: "center", padding: "6px" }}>
-      {["D", "W", "M", "YTD", "Y", "MAX"].map((tf) => (
+      {["D", "W", "M", "YTD", "MAX"].map((tf) => (
         <button
           key={tf}
           onClick={() => {

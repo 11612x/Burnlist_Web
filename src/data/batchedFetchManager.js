@@ -3,6 +3,7 @@ import activeBurnlistManager from './activeBurnlistManager';
 import historicalDataManager from './historicalDataManager';
 import returnCalculator from './returnCalculator';
 import notificationManager from './notificationManager';
+import navCalculator from './navCalculator';
 
 /**
  * Batched Fetch Manager for Twelve Data API
@@ -360,7 +361,7 @@ class BatchedFetchManager {
   }
 
   /**
-   * Compute and save watchlist average return as a timestamped datapoint
+   * Compute and save watchlist average return using NEW NAV calculator
    */
   async computeAndSaveWatchlistAverage(burnlistSlug) {
     try {
@@ -374,22 +375,51 @@ class BatchedFetchManager {
       const watchlist = watchlists[watchlistKey];
       const items = watchlist.items;
 
-      // Calculate equally weighted average return using current timeframe-based logic
-      const averageReturn = this.calculateTimeframeBasedReturn(items, 'MAX'); // Default to MAX for now
-      
-      if (averageReturn !== null) {
-        // Save as timestamped datapoint for the chart
-        const datapoint = {
-          timestamp: new Date().toISOString(),
-          averageReturn: parseFloat(averageReturn.toFixed(5)), // Store with 5 decimal places internally
-          tickerCount: items.length,
-          timeframe: 'MAX'
-        };
-
-        const saved = historicalDataManager.saveWatchlistDatapoint(burnlistSlug, datapoint);
+      // NEW NAV CALCULATION: Use NAV calculator for timeframe-based returns
+      try {
+        // Calculate NAV performance for MAX timeframe (default for historical data)
+        const navData = navCalculator.calculateNAVPerformance(items, 'MAX');
         
-        if (saved) {
-          console.log(`💾 Saved watchlist datapoint for ${burnlistSlug}: ${averageReturn.toFixed(2)}% (${items.length} tickers)`);
+        if (navData && navData.length > 0) {
+          // Get the latest NAV value
+          const latestNav = navData[navData.length - 1];
+          const averageReturn = latestNav.returnPercent;
+          
+          // Save as timestamped datapoint for the chart
+          const datapoint = {
+            timestamp: new Date().toISOString(),
+            averageReturn: parseFloat(averageReturn.toFixed(5)), // Store with 5 decimal places internally
+            tickerCount: items.length,
+            timeframe: 'MAX'
+          };
+
+          const saved = historicalDataManager.saveWatchlistDatapoint(burnlistSlug, datapoint);
+          
+          if (saved) {
+            console.log(`💾 Saved NEW NAV datapoint for ${burnlistSlug}: ${averageReturn.toFixed(2)}% (${items.length} tickers)`);
+          }
+        } else {
+          console.log(`⚠️ No NAV data generated for ${burnlistSlug}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error in NEW NAV calculation for ${burnlistSlug}:`, error);
+        
+        // Fallback to old calculation method
+        const averageReturn = this.calculateTimeframeBasedReturn(items, 'MAX');
+        
+        if (averageReturn !== null) {
+          const datapoint = {
+            timestamp: new Date().toISOString(),
+            averageReturn: parseFloat(averageReturn.toFixed(5)),
+            tickerCount: items.length,
+            timeframe: 'MAX'
+          };
+
+          const saved = historicalDataManager.saveWatchlistDatapoint(burnlistSlug, datapoint);
+          
+          if (saved) {
+            console.log(`💾 Saved FALLBACK datapoint for ${burnlistSlug}: ${averageReturn.toFixed(2)}% (${items.length} tickers)`);
+          }
         }
       }
     } catch (error) {

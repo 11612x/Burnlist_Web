@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NAV Calculator Test</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: black;
+            color: rgb(140,185,162);
+            padding: 20px;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid rgb(140,185,162);
+        }
+    </style>
+</head>
+<body>
+    <h1>NAV Calculator Test</h1>
+    <div id="test-results"></div>
+
+    <script type="module">
+        // Import the NAV calculator
+        import navCalculator from './src/data/navCalculator.js';
+        
+        const resultsDiv = document.getElementById('test-results');
+        
+        // Test data
+        const testData = [
+            {
+                symbol: 'AAPL',
+                buyPrice: 150,
+                buyDate: '2024-01-01T00:00:00.000Z',
+                historicalData: [
+                    { timestamp: '2024-01-01T00:00:00.000Z', price: 150 },
+                    { timestamp: '2024-01-02T00:00:00.000Z', price: 155 },
+                    { timestamp: '2024-01-03T00:00:00.000Z', price: 160 }
+                ]
+            },
+            {
+                symbol: 'MSFT',
+                buyPrice: 300,
+                buyDate: '2024-01-01T00:00:00.000Z',
+                historicalData: [
+                    { timestamp: '2024-01-01T00:00:00.000Z', price: 300 },
+                    { timestamp: '2024-01-02T00:00:00.000Z', price: 310 },
+                    { timestamp: '2024-01-03T00:00:00.000Z', price: 320 }
+                ]
+            }
+        ];
+        
+        function runTest() {
+            try {
+                console.log('🧪 Testing NAV Calculator...');
+                
+                // Test MAX timeframe
+                const maxResult = navCalculator.calculateNAVPerformance(testData, 'MAX');
+                console.log('🧪 MAX timeframe result:', maxResult);
+                
+                resultsDiv.innerHTML = `
+                    <div class="test-result">
+                        <h3>MAX Timeframe Test</h3>
+                        <p>Data points: ${maxResult.length}</p>
+                        <p>First point: ${JSON.stringify(maxResult[0])}</p>
+                        <p>Last point: ${JSON.stringify(maxResult[maxResult.length - 1])}</p>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('❌ NAV Calculator test failed:', error);
+                resultsDiv.innerHTML = `
+                    <div class="test-result" style="color: red;">
+                        <h3>Test Failed</h3>
+                        <p>Error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Run test when page loads
+        runTest();
+    </script>
+</body>
+</html> 

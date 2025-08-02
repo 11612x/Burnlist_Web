@@ -1,8 +1,9 @@
 /**
  * TickerRow.jsx
  * Patch summary:
- * - Update comment on return percentage calculation to clarify that it uses timeframe-sliced historical data.
- * - The return percentage now clearly reflects, "How did this asset perform from the start of the selected timeframe?"
+ * - Update to use new NAV calculations with dynamic buy prices based on timeframe
+ * - Import navCalculator for dynamic buy price calculation
+ * - Replace simple return calculation with timeframe-based NAV calculation
  */
 import React from "react";
 import { useThemeColor } from '../ThemeContext';
@@ -10,16 +11,27 @@ import { getCachedExchange } from '../utils/exchangeDetector';
 import CustomButton from './CustomButton'; // Added import for CustomButton
 import { formatDateEuropean } from '../utils/dateUtils';
 import { logger } from '../utils/logger';
+import navCalculator from '../data/navCalculator';
 
-const CRT_GREEN = 'rgb(140,185,162)';
+const CRT_GREEN = 'rgb(149,184,163)';
+const CRT_RED = '#e31507';
 
 const TickerRow = ({
-  item, index, editMode,
+  item, index, editMode, selectedTimeframe = 'W', // Add selectedTimeframe prop
   handleChangeSymbol, handleBuyPriceChange, handleBuyDateChange, handleRevertBuyDate, handleFetchHistoricalData, handleDelete, handleRefreshPrice, items, changePercent, lookedUpBuyPrice
 }) => {
   const green = useThemeColor(CRT_GREEN);
+  const red = useThemeColor(CRT_RED);
   const black = useThemeColor('black');
-  const red = useThemeColor('#e31507');
+  
+  // 🔍 LEVEL 1 DEBUG: Ticker Row Rendering
+  logger.log(`🔍 [TICKER ROW RENDER] ${item?.symbol || 'unknown'}:`);
+  logger.log(`  - Index: ${index}`);
+  logger.log(`  - Timeframe: ${selectedTimeframe}`);
+  logger.log(`  - Historical data points: ${item?.historicalData?.length || 0}`);
+  logger.log(`  - Buy price: $${item?.buyPrice}`);
+  logger.log(`  - Current price: $${item?.currentPrice}`);
+  
   logger.debug("TickerRow received item:", item);
   logger.debug("Historical Data:", item.historicalData);
 
@@ -28,59 +40,66 @@ const TickerRow = ({
     return null;
   }
 
-  // Calculate buy price - use stored value or fall back to oldest historical price
+  // NEW NAV CALCULATION: Use shared baseline price for consistency with NAV calculator
   let buy = NaN;
-  if (!isNaN(Number(item.buyPrice))) {
-    buy = Number(item.buyPrice);
-    logger.debug(`Using stored buyPrice: ${buy}`);
-  } else if (item.historicalData && item.historicalData.length > 0) {
-    const first = item.historicalData[0];
-    const last = item.historicalData[item.historicalData.length - 1];
-    
-    // Check if data is sorted ascending or descending
-    const isAscending = item.historicalData.length === 1 || 
-                        new Date(first?.timestamp) < new Date(last?.timestamp);
-    
-    if (isAscending) {
-      // Ascending: oldest is at the beginning
-      buy = Number(first?.price);
-    } else {
-      // Descending: oldest is at the end
-      buy = Number(last?.price);
-    }
-    logger.debug(`Using oldest historical price as buyPrice: ${buy} (data is ${isAscending ? 'ascending' : 'descending'})`);
-  }
-  
+  let currentPrice = NaN;
+  let returnPercent = 0;
 
-
-  // Find the latest price - handle both ascending and descending sorted data
-  let latestPrice = NaN;
-  if (item.historicalData && item.historicalData.length > 0) {
-    const first = item.historicalData[0];
-    const last = item.historicalData[item.historicalData.length - 1];
-    
-    // Check if data is sorted ascending (oldest to newest) or descending (newest to oldest)
-    const isAscending = item.historicalData.length === 1 || 
-                        new Date(first?.timestamp) < new Date(last?.timestamp);
-    
-    if (isAscending) {
-      // Ascending: latest is at the end
-      latestPrice = Number(last?.price);
+  try {
+    // For MAX timeframe, use shared baseline price (same as NAV calculator)
+    if (selectedTimeframe === 'MAX' && items && items.length > 0) {
+      // Get shared baseline price from NAV calculator
+      buy = navCalculator.getSharedBaselinePrice(items, selectedTimeframe);
+      logger.log(`🔍 [TICKER ROW SHARED BASELINE] ${item.symbol}: Using shared baseline price = $${buy}`);
     } else {
-      // Descending: latest is at the beginning
-      latestPrice = Number(first?.price);
+      // For other timeframes, use individual dynamic buy price
+      buy = navCalculator.calculateDynamicBuyPrice(item, selectedTimeframe);
+      logger.log(`🔍 [TICKER ROW INDIVIDUAL BASELINE] ${item.symbol}: Using individual baseline price = $${buy}`);
     }
     
-    logger.debug(`Data sort order: ${isAscending ? 'ascending' : 'descending'}, latest price: ${latestPrice}`);
+    // Get current price from historical data
+    if (item.historicalData && item.historicalData.length > 0) {
+      const first = item.historicalData[0];
+      const last = item.historicalData[item.historicalData.length - 1];
+      
+      // Check if data is sorted ascending or descending
+      const isAscending = item.historicalData.length === 1 || 
+                          new Date(first?.timestamp) < new Date(last?.timestamp);
+      
+      if (isAscending) {
+        // Ascending: latest is at the end
+        currentPrice = Number(last?.price);
+      } else {
+        // Descending: latest is at the beginning
+        currentPrice = Number(first?.price);
+      }
+    }
+    
+    // Use currentPrice field if available, otherwise use latest historical price
+    if (typeof item.currentPrice === 'number') {
+      currentPrice = item.currentPrice;
+    }
+    
+    // Calculate return percentage using new NAV logic
+    if (!isNaN(buy) && !isNaN(currentPrice) && buy > 0) {
+      returnPercent = ((currentPrice - buy) / buy) * 100;
+    }
+    
+    // 🔍 LEVEL 1 DEBUG: New NAV Calculation
+    logger.log(`🔍 [TICKER ROW NAV DEBUG] ${item.symbol}:`);
+    logger.log(`  - Timeframe: ${selectedTimeframe}`);
+    logger.log(`  - Baseline Price: $${buy}`);
+    logger.log(`  - Current Price: $${currentPrice}`);
+    logger.log(`  - Return %: ${returnPercent.toFixed(2)}%`);
+    
+  } catch (error) {
+    logger.error(`Error calculating NAV for ${item.symbol}:`, error);
+    // Fallback to old calculation
+    buy = Number(item.buyPrice) || 0;
+    currentPrice = item.currentPrice || 0;
+    returnPercent = changePercent || 0;
   }
-  
-  // Use currentPrice field if available, otherwise use latest historical price
-  const currentPrice = typeof item.currentPrice === 'number' ? item.currentPrice : latestPrice;
 
-  logger.debug(`Buy price for ${item.symbol}:`, buy);
-  logger.debug(`Latest price for ${item.symbol}:`, latestPrice);
-  logger.debug(`Current price for ${item.symbol}:`, currentPrice);
-  
   // DEBUG: Check historical data order and actual stored values
   logger.debug(`[DEBUG PRICES] ${item.symbol}:`);
     logger.debug(`item.buyPrice (stored):`, item.buyPrice);
@@ -207,9 +226,9 @@ const TickerRow = ({
           </span>
         )}
       </td>
-      {/* Buy Price / Start Price: editable in edit mode, context-aware display */}
+      {/* Buy Price / Start Price: shows baseline price used by NAV calculator */}
       <td style={{ padding: 8, fontFamily: "'Courier New', Courier, monospace", color: green, fontSize: 15 }}
-          title={`${editMode ? 'Stored Buy Price' : 'Display Price'}: $${editMode ? (!isNaN(buy) ? buy.toFixed(2) : 'N/A') : (!isNaN(lookedUpBuyPrice) ? lookedUpBuyPrice.toFixed(2) : 'N/A')} | Buy Date: ${item.buyDate}`}>
+          title={`${editMode ? 'Stored Buy Price' : 'Baseline Price'}: $${editMode ? (!isNaN(buy) ? buy.toFixed(2) : 'N/A') : (!isNaN(buy) ? buy.toFixed(2) : 'N/A')} | Buy Date: ${item.buyDate}`}>
         {editMode ? (
           <input
             type="number"
@@ -232,7 +251,7 @@ const TickerRow = ({
             }}
           />
         ) : (
-          !isNaN(lookedUpBuyPrice) ? lookedUpBuyPrice.toFixed(2) : "-"
+          !isNaN(buy) ? buy.toFixed(2) : "-"
         )}
       </td>
       {/* Buy Date: editable in edit mode */}
@@ -315,18 +334,41 @@ const TickerRow = ({
           title={`Current Price: $${!isNaN(currentPrice) ? currentPrice.toFixed(2) : 'N/A'} | Last updated: ${lastUpdate}`}>
         {!isNaN(currentPrice) ? currentPrice.toFixed(2) : "-"}
       </td>
-      {/* % Change: still updates per timeframe */}
+      {/* % Change: shows timeframe-specific return with reference date */}
       <td style={{ padding: 8, fontFamily: "'Courier New', Courier, monospace", color: green, fontSize: 15 }}>
         {
           (() => {
-            const parsedChange = Number(changePercent);
+            const parsedChange = Number(returnPercent);
             const isValidChange = isFinite(parsedChange);
+
+            // Get reference date for tooltip
+            const getReferenceDate = () => {
+              const now = new Date();
+              switch (selectedTimeframe) {
+                case 'D':
+                  const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                  return dayAgo.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                case 'W':
+                  const weekAgo = navCalculator.getTradingDaysAgo(7);
+                  return weekAgo.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                case 'M':
+                  const monthAgo = navCalculator.getTradingDaysAgo(30);
+                  return monthAgo.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                case 'YTD':
+                  const jan1 = new Date(now.getFullYear(), 0, 1);
+                  return jan1.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                case 'MAX':
+                  return 'original buy date';
+                default:
+                  return 'baseline date';
+              }
+            };
 
             return isValidChange ? (
               <span
-                title={`Return: ${parsedChange >= 0 ? '+' : ''}${parsedChange.toFixed(2)}% | Timeframe: Selected timeframe`}
+                title={`ETF-style return: ${parsedChange >= 0 ? '+' : ''}${parsedChange.toFixed(2)}% from ${getReferenceDate()} | Timeframe: ${selectedTimeframe}`}
                 style={{
-                  color: parsedChange >= 0 ? green : red,
+                  color: parsedChange >= 0 ? CRT_GREEN : CRT_RED,
                   fontFamily: "'Courier New', Courier, monospace"
                 }}
               >
@@ -360,8 +402,8 @@ const TickerRow = ({
               }}
               style={{
                 background: 'transparent',
-                color: green,
-                border: `1px solid ${green}`,
+                color: CRT_GREEN,
+                border: `1px solid ${CRT_GREEN}`,
                 fontFamily: "'Courier New', monospace",
                 textTransform: 'lowercase',
                 fontWeight: 400,
@@ -383,8 +425,8 @@ const TickerRow = ({
               }}
               style={{
                 background: 'transparent',
-                color: green,
-                border: `1px solid ${green}`,
+                color: CRT_RED,
+                border: `1px solid ${CRT_RED}`,
                 fontFamily: "'Courier New', monospace",
                 textTransform: 'lowercase',
                 fontWeight: 400,

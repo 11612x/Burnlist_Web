@@ -4,6 +4,7 @@ import activeBurnlistManager from './activeBurnlistManager';
 import historicalDataManager from './historicalDataManager';
 import returnCalculator from './returnCalculator';
 import notificationManager from './notificationManager';
+import navCalculator from './navCalculator';
 import { logger } from '../utils/logger';
 
 class TwelveDataSyncManager {
@@ -163,16 +164,47 @@ class TwelveDataSyncManager {
       activeBurnlists.forEach(slug => {
         const burnlist = activeBurnlistManager.getBurnlistData(slug);
         if (burnlist && burnlist.items) {
-          // Calculate average return for the entire watchlist
-          const watchlistReturn = returnCalculator.calculateWatchlistReturn(burnlist.items);
-          
-          // Save chart datapoint for this watchlist
-          if (watchlistReturn !== null) {
-            historicalDataManager.saveWatchlistDatapoint(slug, {
-              timestamp: Date.now(),
-              averageReturn: watchlistReturn,
-              tickerCount: burnlist.items.length
-            });
+          // NEW NAV CALCULATION: Use NAV calculator for average return
+          try {
+            const navData = navCalculator.calculateNAVPerformance(burnlist.items, 'MAX');
+            
+            if (navData && navData.length > 0) {
+              const latestNav = navData[navData.length - 1];
+              const watchlistReturn = latestNav.returnPercent;
+              
+              // Save chart datapoint for this watchlist
+              if (watchlistReturn !== null) {
+                historicalDataManager.saveWatchlistDatapoint(slug, {
+                  timestamp: Date.now(),
+                  averageReturn: watchlistReturn,
+                  tickerCount: burnlist.items.length
+                });
+              }
+            } else {
+              // Fallback to old calculation
+              const watchlistReturn = returnCalculator.calculateWatchlistReturn(burnlist.items);
+              
+              if (watchlistReturn !== null) {
+                historicalDataManager.saveWatchlistDatapoint(slug, {
+                  timestamp: Date.now(),
+                  averageReturn: watchlistReturn,
+                  tickerCount: burnlist.items.length
+                });
+              }
+            }
+          } catch (error) {
+            logger.error(`❌ Error in NEW NAV calculation for ${slug}:`, error);
+            
+            // Fallback to old calculation
+            const watchlistReturn = returnCalculator.calculateWatchlistReturn(burnlist.items);
+            
+            if (watchlistReturn !== null) {
+              historicalDataManager.saveWatchlistDatapoint(slug, {
+                timestamp: Date.now(),
+                averageReturn: watchlistReturn,
+                tickerCount: burnlist.items.length
+              });
+            }
           }
         }
       });
@@ -262,16 +294,47 @@ class TwelveDataSyncManager {
         const updatedBurnlist = Object.values(updatedWatchlists).find(w => w.slug === slug);
         
         if (updatedBurnlist && updatedBurnlist.items) {
-          // Calculate average return for the entire watchlist
-          const watchlistReturn = returnCalculator.calculateWatchlistReturn(updatedBurnlist.items);
-          
-          // Save chart datapoint for this watchlist
-          if (watchlistReturn !== null) {
-            historicalDataManager.saveWatchlistDatapoint(slug, {
-              timestamp: Date.now(),
-              averageReturn: watchlistReturn,
-              tickerCount: updatedBurnlist.items.length
-            });
+          // NEW NAV CALCULATION: Use NAV calculator for average return
+          try {
+            const navData = navCalculator.calculateNAVPerformance(updatedBurnlist.items, 'MAX');
+            
+            if (navData && navData.length > 0) {
+              const latestNav = navData[navData.length - 1];
+              const watchlistReturn = latestNav.returnPercent;
+              
+              // Save chart datapoint for this watchlist
+              if (watchlistReturn !== null) {
+                historicalDataManager.saveWatchlistDatapoint(slug, {
+                  timestamp: Date.now(),
+                  averageReturn: watchlistReturn,
+                  tickerCount: updatedBurnlist.items.length
+                });
+              }
+            } else {
+              // Fallback to old calculation
+              const watchlistReturn = returnCalculator.calculateWatchlistReturn(updatedBurnlist.items);
+              
+              if (watchlistReturn !== null) {
+                historicalDataManager.saveWatchlistDatapoint(slug, {
+                  timestamp: Date.now(),
+                  averageReturn: watchlistReturn,
+                  tickerCount: updatedBurnlist.items.length
+                });
+              }
+            }
+          } catch (error) {
+            logger.error(`❌ Error in NEW NAV calculation for ${slug}:`, error);
+            
+            // Fallback to old calculation
+            const watchlistReturn = returnCalculator.calculateWatchlistReturn(updatedBurnlist.items);
+            
+            if (watchlistReturn !== null) {
+              historicalDataManager.saveWatchlistDatapoint(slug, {
+                timestamp: Date.now(),
+                averageReturn: watchlistReturn,
+                tickerCount: updatedBurnlist.items.length
+              });
+            }
           }
         }
       }

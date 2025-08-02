@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import navCalculator from './navCalculator';
 
 class ReturnCalculator {
   constructor() {
@@ -10,13 +11,27 @@ class ReturnCalculator {
     this.notificationCallback = callback;
   }
 
-  // Calculate average return for an entire watchlist using timeframe-based logic
+  // NEW NAV CALCULATION: Calculate average return using NAV calculator with fallback
   calculateWatchlistReturn(items, timeframe = 'MAX') {
     try {
       if (!Array.isArray(items) || items.length === 0) {
         return null;
       }
 
+      // Try NEW NAV calculator first
+      try {
+        const navData = navCalculator.calculateNAVPerformance(items, timeframe);
+        
+        if (navData && navData.length > 0) {
+          const latestNav = navData[navData.length - 1];
+          logger.debug(`NEW NAV calculator result (${timeframe}): ${latestNav.returnPercent.toFixed(2)}%`);
+          return latestNav.returnPercent;
+        }
+      } catch (error) {
+        logger.error('Error in NEW NAV calculation, falling back to old method:', error);
+      }
+
+      // FALLBACK: Use old calculation method
       let totalReturn = 0;
       let validItems = 0;
 
@@ -92,7 +107,7 @@ class ReturnCalculator {
       }
 
       const averageReturn = totalReturn / validItems;
-      logger.debug(`Watchlist average return (${timeframe}): ${averageReturn.toFixed(2)}% (${validItems}/${items.length} valid tickers)`);
+      logger.debug(`FALLBACK Watchlist average return (${timeframe}): ${averageReturn.toFixed(2)}% (${validItems}/${items.length} valid tickers)`);
       
       return Number.isFinite(averageReturn) ? averageReturn : null;
     } catch (error) {

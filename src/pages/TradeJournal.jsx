@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useTheme } from '../ThemeContext';
+import { useTheme, useThemeColor } from '../ThemeContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import NotificationBanner from '@components/NotificationBanner';
 import CustomButton from '@components/CustomButton';
@@ -10,17 +10,22 @@ import backbutton from '../assets/backbutton.png';
 import useNotification from '../hooks/useNotification';
 import { logger } from '../utils/logger';
 import { getCachedExchange } from '../utils/exchangeDetector';
+import logo from '../assets/logo.png';
+import logoblack from '../assets/logoblack.png';
 
 const CRT_GREEN = 'rgb(140,185,162)';
 
 const TradeJournal = () => {
-  const { isInverted } = useTheme();
+  const { isInverted, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [trades, setTrades] = useState([]);
   const { notification, notificationType, setNotification, setNotificationType } = useNotification();
   const [editMode, setEditMode] = useState(false);
   const [selectedTrades, setSelectedTrades] = useState(new Set());
+  const green = useThemeColor(CRT_GREEN);
+  const black = useThemeColor('black');
+  const red = useThemeColor('#e31507');
 
   // Load trades from localStorage on mount
   useEffect(() => {
@@ -205,29 +210,65 @@ const TradeJournal = () => {
       padding: '0',
       fontFamily: "'Courier New', monospace"
     }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '20px',
-        borderBottom: `2px solid ${CRT_GREEN}`,
-        background: 'rgba(0,0,0,0.3)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <h1 style={{ 
-            color: CRT_GREEN, 
-            margin: 0, 
-            fontSize: '24px',
-            fontWeight: 'bold'
+      {/* Main Content */}
+      <div style={{ padding: '32px' }}>
+        {/* Header Section */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          marginBottom: 24,
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'flex-start', 
+            gap: 12
           }}>
-            TRADE JOURNAL
-          </h1>
+            <button
+              onClick={toggleTheme}
+              style={{
+                border: 'none',
+                background: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                minHeight: '44px',
+              }}
+              aria-label="Toggle theme"
+            >
+              <img 
+                src={isInverted ? logoblack : logo} 
+                alt="Burnlist Logo" 
+                style={{ 
+                  width: 44, 
+                  height: 44, 
+                  marginRight: 10, 
+                  transition: 'filter 0.3s'
+                }} 
+              />
+            </button>
+            <strong style={{ 
+              fontSize: '170%', 
+              lineHeight: '44px', 
+              display: 'inline-block',
+              color: green,
+              height: '44px'
+            }}>BURNLIST v1.1</strong>
+          </div>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 10
+          }}>
+            <span style={{ color: red, fontWeight: 'bold', fontSize: 12 }}>0</span>
+            <span style={{ color: green, fontWeight: 'bold', fontSize: 12 }}>0</span>
+            <span style={{ color: green }}>
+              ACCOUNT: local
+            </span>
+          </div>
         </div>
-        <div style={{ color: CRT_GREEN, fontSize: '14px' }}>
-          {trades.length} Trades Logged
-        </div>
-      </div>
 
       {/* Navigation Buttons */}
       <div style={{
@@ -240,6 +281,44 @@ const TradeJournal = () => {
         gap: '10px',
         marginBottom: '20px'
       }}>
+        <CustomButton
+          onClick={() => navigate('/')}
+          style={{
+            background: location.pathname === '/' || location.pathname.startsWith('/burn/') ? CRT_GREEN : 'transparent',
+            color: location.pathname === '/' || location.pathname.startsWith('/burn/') ? '#000000' : CRT_GREEN,
+            border: `1px solid ${CRT_GREEN}`,
+            padding: '9px 18px',
+            fontFamily: "'Courier New', monospace",
+            fontSize: '12px',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            minWidth: '80px',
+            textAlign: 'center'
+          }}
+        >
+          BURNPAGE
+        </CustomButton>
+        
+        <CustomButton
+                      onClick={() => navigate('/screeners')}
+            style={{
+              background: location.pathname === '/screeners' ? CRT_GREEN : 'transparent',
+              color: location.pathname === '/screeners' ? '#000000' : CRT_GREEN,
+            border: `1px solid ${CRT_GREEN}`,
+            padding: '9px 18px',
+            fontFamily: "'Courier New', monospace",
+            fontSize: '12px',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            minWidth: '80px',
+            textAlign: 'center'
+          }}
+        >
+                      SCREENERS
+        </CustomButton>
+        
         <CustomButton
           onClick={() => navigate('/universes')}
           style={{
@@ -276,44 +355,6 @@ const TradeJournal = () => {
           }}
         >
           JOURNAL
-        </CustomButton>
-        
-        <CustomButton
-          onClick={() => navigate('/market')}
-          style={{
-            background: location.pathname === '/market' ? CRT_GREEN : 'transparent',
-            color: location.pathname === '/market' ? '#000000' : CRT_GREEN,
-            border: `1px solid ${CRT_GREEN}`,
-            padding: '9px 18px',
-            fontFamily: "'Courier New', monospace",
-            fontSize: '12px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            minWidth: '80px',
-            textAlign: 'center'
-          }}
-        >
-          MARKET
-        </CustomButton>
-        
-        <CustomButton
-          onClick={() => navigate('/')}
-          style={{
-            background: location.pathname === '/' || location.pathname.startsWith('/burn/') ? CRT_GREEN : 'transparent',
-            color: location.pathname === '/' || location.pathname.startsWith('/burn/') ? '#000000' : CRT_GREEN,
-            border: `1px solid ${CRT_GREEN}`,
-            padding: '9px 18px',
-            fontFamily: "'Courier New', monospace",
-            fontSize: '12px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            minWidth: '80px',
-            textAlign: 'center'
-          }}
-        >
-          BURNPAGE
         </CustomButton>
       </div>
 
@@ -391,41 +432,17 @@ const TradeJournal = () => {
         />
       )}
 
-      {/* Main Content */}
-      <div style={{ padding: '20px' }}>
-        {/* Edit Button - Above Table */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          marginBottom: '10px'
-        }}>
-          <button
-            onClick={handleToggleEditMode}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: CRT_GREEN,
-              fontFamily: "'Courier New', monospace",
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              padding: '4px 8px',
-              textDecoration: 'underline'
-            }}
-          >
-            {editMode ? 'DONE' : 'EDIT'}
-          </button>
-        </div>
+
 
         {trades.length === 0 ? (
           <div style={{ 
             textAlign: 'center', 
-            padding: '60px 20px',
+            margin: '70px 0 1px 0',
             color: CRT_GREEN,
             fontSize: '18px'
           }}>
             <div style={{ marginBottom: '20px' }}>
-              📊 No executed trades yet
+              No executed trades yet
             </div>
             <div style={{ fontSize: '14px', opacity: 0.7 }}>
               Execute trades from the Universe page to see them here
@@ -694,6 +711,137 @@ const TradeJournal = () => {
           </CustomButton>
         </div>
       )}
+
+      {/* Action Buttons - Bottom Right */}
+      <div className="action-buttons-container">
+        <style>
+          {`
+            .action-buttons-container {
+              position: fixed;
+              bottom: 20px;
+              right: 20px;
+              display: flex;
+              gap: 8px;
+              z-index: 1000;
+            }
+            
+            @media (max-width: 768px) {
+              .action-buttons-container {
+                position: fixed;
+                top: 50%;
+                right: 10px;
+                transform: translateY(-50%);
+                flex-direction: column;
+                gap: 8px;
+              }
+            }
+            
+            @media (max-width: 480px) {
+              .action-buttons-container {
+                position: fixed;
+                top: 50%;
+                right: 8px;
+                transform: translateY(-50%);
+                flex-direction: column;
+                gap: 6px;
+              }
+            }
+            
+            .action-button {
+              background: ${black};
+              color: ${green};
+              border: 1px solid ${green};
+              font-size: 12px;
+              padding: 6px 12px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+              min-height: 32px;
+              font-family: 'Courier New', monospace;
+              cursor: pointer;
+              text-decoration: none;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            
+            @media (max-width: 768px) {
+              .action-button {
+                font-size: 10px;
+                padding: 6px 8px;
+                min-height: 32px;
+                width: 60px;
+              }
+            }
+            
+            @media (max-width: 480px) {
+              .action-button {
+                font-size: 9px;
+                padding: 4px 6px;
+                min-height: 28px;
+                width: 50px;
+              }
+            }
+          `}
+        </style>
+        <button
+          onClick={() => {
+            // Placeholder for create functionality
+            setNotification('Create functionality coming soon');
+            setNotificationType('info');
+          }}
+          className="action-button"
+          style={{
+            backgroundColor: green,
+            color: black,
+            fontWeight: 'bold',
+            fontSize: '14px',
+            transition: 'all 0.2s ease-in-out',
+            padding: '8px 16px'
+          }}
+        >
+          +++
+        </button>
+        <button
+          onClick={handleToggleEditMode}
+          className="action-button"
+          style={{
+            textTransform: 'lowercase',
+            fontWeight: 400,
+            letterSpacing: 1
+          }}
+        >
+          {editMode ? 'done' : 'edit'}
+        </button>
+        <button
+          onClick={() => {
+            // Placeholder for import functionality
+            setNotification('Import functionality coming soon');
+            setNotificationType('info');
+          }}
+          className="action-button"
+          style={{
+            textTransform: 'lowercase',
+            fontWeight: 400,
+            letterSpacing: 1
+          }}
+        >
+          import
+        </button>
+        <button
+          onClick={() => {
+            // Placeholder for export functionality
+            setNotification('Export functionality coming soon');
+            setNotificationType('info');
+          }}
+          className="action-button"
+          style={{
+            textTransform: 'lowercase',
+            fontWeight: 400,
+            letterSpacing: 1
+          }}
+        >
+          export
+        </button>
+      </div>
     </div>
   );
 };

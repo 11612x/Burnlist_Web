@@ -2,10 +2,9 @@ import React from 'react';
 import { useThemeColor } from '../ThemeContext';
 import CustomButton from './CustomButton';
 
-const CRT_GREEN = 'rgb(140,185,162)';
+const CRT_GREEN = 'rgb(149,184,163)';
 
 const EditToggleButton = ({ editMode, setEditMode }) => {
-  const green = useThemeColor(CRT_GREEN);
   const black = useThemeColor('black');
   return (
     <div style={{ marginTop: 0, textAlign: "right" }}>
@@ -13,8 +12,8 @@ const EditToggleButton = ({ editMode, setEditMode }) => {
         onClick={() => setEditMode(!editMode)}
         style={{
           background: 'transparent',
-          color: green,
-          border: `1px solid ${green}`,
+          color: CRT_GREEN,
+          border: `1px solid ${CRT_GREEN}`,
           fontFamily: "'Courier New', monospace",
           textTransform: 'lowercase',
           fontWeight: 400,

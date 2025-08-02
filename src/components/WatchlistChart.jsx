@@ -14,6 +14,7 @@ import CustomTooltip from "./CustomTooltip";
 import { getSlicedData, getReturnInTimeframe } from '@logic/portfolioUtils';
 import { useThemeColor } from '../ThemeContext';
 import historicalDataManager from '../data/historicalDataManager';
+import navCalculator from '../data/navCalculator';
 import { logger } from '../utils/logger';
 
 // Register ChartJS components
@@ -27,11 +28,13 @@ ChartJS.register(
   Legend
 );
 
-const CRT_GREEN = 'rgb(140,185,162)';
+const CRT_GREEN = 'rgb(149,184,163)';
+const CRT_RED = '#e31507';
 
 const WatchlistChart = ({ 
   portfolioReturnData, 
   watchlistSlug, 
+  timeframe = 'W', // Add timeframe prop with default value
   height = 300, 
   showTooltip = true, 
   mini = false, 
@@ -41,302 +44,61 @@ const WatchlistChart = ({
   const black = useThemeColor('black');
   const gray = useThemeColor('#888');
   
-  // Memoize chart data for performance
+  // Memoize chart data for performance using ETF-style NAV calculation
   const chartData = useMemo(() => {
-    // If we have a watchlist slug, use the new watchlist chart data
+    // 🔍 SIMPLE DEBUG: WatchlistChart memo triggered
+    console.log(`🔍 [WATCHLIST CHART MEMO] portfolioReturnData length: ${portfolioReturnData?.length || 0}`);
+    console.log(`🔍 [WATCHLIST CHART MEMO] timeframe: ${timeframe}`);
+    console.log(`🔍 [WATCHLIST CHART MEMO] watchlistSlug: ${watchlistSlug}`);
+    
+    // PRIORITY 1: Use NEW NAV Calculator (ETF-style NAV)
+    if (portfolioReturnData && portfolioReturnData.length > 0) {
+      console.log(`🔍 [WATCHLIST CHART] Using NEW NAV Calculator with ${portfolioReturnData.length} tickers`);
+      
+      try {
+        const navData = navCalculator.calculateNAVPerformance(portfolioReturnData, timeframe);
+        console.log(`🔍 [WATCHLIST CHART] NAV Calculator returned ${navData?.length || 0} data points`);
+        
+        if (navData && navData.length > 0) {
+          // Normalize NAV data to start at 0%
+          const baselineValue = navData[0]?.returnPercent || 0;
+          console.log(`🔍 [WATCHLIST CHART] Normalizing NAV data - baseline value: ${baselineValue.toFixed(2)}%`);
+          
+          return navData.map((datapoint, index) => ({
+            timestampValue: new Date(datapoint.timestamp).getTime(),
+            returnPercent: datapoint.returnPercent - baselineValue, // Normalize to start at 0%
+            xIndex: index
+          }));
+        }
+      } catch (error) {
+        console.error('🔍 [WATCHLIST CHART] Error in NAV Calculator:', error);
+      }
+    }
+    
+    // PRIORITY 2: Fallback to old watchlist chart data (if available)
     if (watchlistSlug) {
       const watchlistChartData = historicalDataManager.getWatchlistChartData(watchlistSlug);
       
       if (watchlistChartData.length > 0) {
+        console.log(`🔍 [WATCHLIST CHART] Using OLD chart data for ${watchlistSlug}: ${watchlistChartData.length} datapoints`);
         logger.debug(`📊 Using watchlist chart data for ${watchlistSlug}: ${watchlistChartData.length} datapoints`);
         
-        // Convert to chart format
+        // Normalize old chart data to start at 0%
+        const baselineValue = watchlistChartData[0]?.averageReturn || 0;
+        console.log(`🔍 [WATCHLIST CHART] Normalizing OLD chart data - baseline value: ${baselineValue.toFixed(2)}%`);
+        
         return watchlistChartData.map((datapoint, index) => ({
           timestampValue: new Date(datapoint.timestamp).getTime(),
-          returnPercent: datapoint.averageReturn,
+          returnPercent: datapoint.averageReturn - baselineValue, // Normalize to start at 0%
           xIndex: index
         }));
-      } else {
-        logger.debug(`⚠️ No watchlist chart data found for ${watchlistSlug}, falling back to individual ticker data`);
       }
     }
     
-    // Fallback to original individual ticker calculation
-    if (!Array.isArray(portfolioReturnData) || portfolioReturnData.length === 0) return [];
-    
-    logger.debug(`🔍 WatchlistChart: Processing ${portfolioReturnData.length} portfolio entries`);
-    
-    // 1. For each ticker, slice to the selected timeframe
-    const sliced = portfolioReturnData.map(entry => {
-      if (!entry || !Array.isArray(entry.historicalData) || entry.historicalData.length === 0) {
-        logger.debug(`⚠️ Skipping entry with no historical data:`, entry);
-        return null;
-      }
-      
-      const { historicalData, buyDate, buyPrice, symbol, timeframe } = entry;
-      logger.debug(`🔍 Processing ${symbol}: ${historicalData.length} historical points, timeframe: ${timeframe}`);
-      
-      // Debug: Show the date range of available data
-      const sortedData = [...historicalData].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-      const firstDate = new Date(sortedData[0].timestamp);
-      const lastDate = new Date(sortedData[sortedData.length - 1].timestamp);
-      logger.debug(`📅 ${symbol} data range: ${firstDate.toISOString()} to ${lastDate.toISOString()}`);
-      
-      const validBuyDate = buyDate && new Date(buyDate).toString() !== 'Invalid Date' ? buyDate : null;
-      const { startPoint, endPoint } = getSlicedData(historicalData, timeframe, validBuyDate, symbol, buyPrice);
-      
-      if (!startPoint || !endPoint) {
-        logger.debug(`⚠️ No valid start/end points for ${symbol} in timeframe ${timeframe}`);
-        return null;
-      }
-      
-      logger.debug(`🔍 ${symbol}: startPoint=${startPoint.timestamp}, endPoint=${endPoint.timestamp}`);
-      
-      // Only keep points within the timeframe
-      const effectiveStart = new Date(startPoint.timestamp).getTime();
-      const effectiveEnd = new Date(endPoint.timestamp).getTime();
-      let points = historicalData.filter(p => {
-        const t = new Date(p.timestamp).getTime();
-        return t >= effectiveStart && t <= effectiveEnd;
-      }).map(p => ({ ...p, timestampValue: new Date(p.timestamp).getTime() }));
-      
-      logger.debug(`🔍 ${symbol}: ${points.length} points within timeframe (${effectiveStart} to ${effectiveEnd})`);
-      
-      // If we have very few points, log the actual timestamps
-      if (points.length <= 5) {
-        logger.debug(`🔍 ${symbol} timestamps:`, points.map(p => new Date(p.timestamp).toISOString()));
-      }
-      
-      // If no points found, this might be the issue for weekly/monthly
-      if (points.length === 0) {
-        console.warn(`⚠️ No points found for ${symbol} in timeframe ${timeframe}!`);
-        console.warn(`⚠️ This could be why the chart line is not showing.`);
-        console.warn(`⚠️ Available data: ${historicalData.length} points from ${firstDate.toISOString()} to ${lastDate.toISOString()}`);
-        console.warn(`⚠️ Requested timeframe: ${timeframe} (start: ${new Date(effectiveStart).toISOString()}, end: ${new Date(effectiveEnd).toISOString()})`);
-        
-        // For debugging: show what the timeframe calculation is doing
-        if (timeframe === 'W' || timeframe === 'M') {
-          console.warn(`🔍 DEBUG: ${timeframe} timeframe calculation:`);
-          console.warn(`🔍 - Buy date: ${validBuyDate}`);
-          console.warn(`🔍 - Start point: ${startPoint ? startPoint.timestamp : 'null'}`);
-          console.warn(`🔍 - End point: ${endPoint ? endPoint.timestamp : 'null'}`);
-          console.warn(`🔍 - Effective start: ${new Date(effectiveStart).toISOString()}`);
-          console.warn(`🔍 - Effective end: ${new Date(effectiveEnd).toISOString()}`);
-        }
-      }
-      
-      // Insert a synthetic point at the start if needed
-      if (points.length > 0 && points[0].timestampValue > effectiveStart) {
-        points.unshift({
-          ...points[0],
-          timestamp: new Date(effectiveStart).toISOString(),
-          timestampValue: effectiveStart,
-          price: points[0].price
-        });
-      }
-      // Insert a synthetic point at the end if needed
-      if (points.length > 0 && points[points.length - 1].timestampValue < effectiveEnd) {
-        points.push({
-          ...points[points.length - 1],
-          timestamp: new Date(effectiveEnd).toISOString(),
-          timestampValue: effectiveEnd,
-          price: points[points.length - 1].price
-        });
-      }
-      
-      // Store startPoint for correct return calculation
-      return { symbol, points, timeframe, buyDate, buyPrice, startPoint };
-    }).filter(Boolean);
-    
-    if (sliced.length === 0) {
-      logger.debug(`⚠️ No valid sliced data found`);
-      return [];
-    }
-    
-    logger.debug(`✅ Sliced data: ${sliced.length} valid entries`);
-    
-    // 2. Build a unified, sorted list of timestamps across all tickers
-    const allTimestamps = Array.from(new Set(sliced.flatMap(t => t.points.map(p => p.timestampValue)))).sort((a, b) => a - b);
-    if (allTimestamps.length === 0) {
-      logger.debug(`⚠️ No timestamps found after flattening`);
-      return [];
-    }
-    
-    logger.debug(`🔍 Total unique timestamps: ${allTimestamps.length}`);
-    
-    // 3. Downsample to 30 evenly spaced points (or 5 if mini) with minimum time gap
-    const maxPoints = mini ? 5 : 30;
-    const step = allTimestamps.length <= maxPoints ? 1 : Math.floor(allTimestamps.length / maxPoints);
-    const sampledTimestamps = allTimestamps.filter((_, i) => i % step === 0);
-    
-    // Always include the last point
-    if (sampledTimestamps[sampledTimestamps.length - 1] !== allTimestamps[allTimestamps.length - 1]) {
-      sampledTimestamps.push(allTimestamps[allTimestamps.length - 1]);
-    }
-    
-    logger.debug(`🔍 After downsampling: ${sampledTimestamps.length} points`);
-    
-    // 4. Apply minimum time gap to prevent very close timestamps (minimum 1 hour apart)
-    // TEMPORARY: Reduce minimum time gap for debugging
-    const minTimeGap = 60 * 60 * 1000; // 1 hour in milliseconds
-    
-    // If we have very few timestamps, don't filter at all
-    // FIX: This prevents the chart from showing only 2 datapoints when data is sparse
-    if (sampledTimestamps.length <= 5) {
-      logger.debug(`🔍 Very few timestamps (${sampledTimestamps.length}), skipping time gap filtering`);
-      const filteredTimestamps = sampledTimestamps;
-      
-      logger.debug(`🔍 Chart data processing: ${allTimestamps.length} total timestamps → ${sampledTimestamps.length} sampled → ${filteredTimestamps.length} filtered`);
-      if (filteredTimestamps.length > 0) {
-        logger.debug(`🔍 First timestamp: ${new Date(filteredTimestamps[0]).toISOString()}`);
-        logger.debug(`🔍 Last timestamp: ${new Date(filteredTimestamps[filteredTimestamps.length - 1]).toISOString()}`);
-      }
-      
-      // 5. Calculate portfolio returns for each timestamp
-      const chartData = filteredTimestamps.map((timestamp, index) => {
-        let totalReturn = 0;
-        let validTickers = 0;
-        
-        sliced.forEach(ticker => {
-          // Check if ticker has valid points
-          if (!ticker.points || ticker.points.length === 0) {
-            logger.debug(`⚠️ Skipping ${ticker.symbol}: no valid points`);
-            return;
-          }
-          
-          // Find the closest price point for this ticker at this timestamp
-          const closestPoint = ticker.points.reduce((closest, point) => {
-            const currentDiff = Math.abs(point.timestampValue - timestamp);
-            const closestDiff = Math.abs(closest.timestampValue - timestamp);
-            return currentDiff < closestDiff ? point : closest;
-          });
-          
-          if (closestPoint && closestPoint.price > 0) {
-            // Calculate cumulative return from buy price (not time series)
-            const returnPercent = ((closestPoint.price - ticker.buyPrice) / ticker.buyPrice) * 100;
-            if (Number.isFinite(returnPercent)) {
-              totalReturn += returnPercent;
-              validTickers++;
-            }
-          }
-        });
-        
-        const averageReturn = validTickers > 0 ? totalReturn / validTickers : 0;
-        
-        return {
-          timestampValue: timestamp,
-          returnPercent: averageReturn,
-          xIndex: index
-        };
-      });
-      // Debug log
-      logger.debug('Chart data points:', chartData);
-      return chartData;
-    }
-    
-    const filteredTimestamps = [];
-    for (let i = 0; i < sampledTimestamps.length; i++) {
-      const currentTs = sampledTimestamps[i];
-      const lastTs = filteredTimestamps[filteredTimestamps.length - 1];
-      
-      if (i === 0 || !lastTs || (currentTs - lastTs) >= minTimeGap) {
-        filteredTimestamps.push(currentTs);
-      } else {
-        logger.debug(`🔍 Skipping close timestamp: ${new Date(currentTs).toISOString()} (${Math.round((currentTs - lastTs) / 1000)}s after ${new Date(lastTs).toISOString()})`);
-      }
-    }
-    
-    logger.debug(`🔍 Chart data processing: ${allTimestamps.length} total timestamps → ${sampledTimestamps.length} sampled → ${filteredTimestamps.length} filtered`);
-    if (filteredTimestamps.length > 0) {
-      logger.debug(`🔍 First timestamp: ${new Date(filteredTimestamps[0]).toISOString()}`);
-      logger.debug(`🔍 Last timestamp: ${new Date(filteredTimestamps[filteredTimestamps.length - 1]).toISOString()}`);
-    }
-    
-    // If we have very few points after filtering, try to be less aggressive
-    if (filteredTimestamps.length < 3 && allTimestamps.length > 2) {
-      logger.debug(`⚠️ Too few points after filtering (${filteredTimestamps.length}), using all timestamps`);
-      return allTimestamps.map((ts, i) => {
-        const returns = sliced.map(ticker => {
-          // For each ticker, find the closest point <= ts
-          const idx = ticker.points.findIndex(p => p.timestampValue >= ts);
-          const point = idx === -1 ? ticker.points[ticker.points.length - 1] : ticker.points[idx];
-          // Always use the startPoint.price for return calculation
-          const start = ticker.startPoint;
-          if (!start || !point || start.price === 0) return 0;
-          const val = ((point.price - start.price) / start.price) * 100;
-          return Number.isFinite(val) ? val : 0;
-        });
-        const avgReturn = returns.length ? returns.reduce((a, b) => a + b, 0) / returns.length : 0;
-        return {
-          timestampValue: ts,
-          returnPercent: Number.isFinite(avgReturn) ? avgReturn : 0,
-          xIndex: i
-        };
-      });
-    }
-    
-    // 5. Calculate portfolio returns for each timestamp
-    if (filteredTimestamps.length === 0) {
-      logger.debug(`⚠️ No valid timestamps found for chart data`);
-      return [];
-    }
-    
-    const chartData = filteredTimestamps.map((timestamp, index) => {
-      let totalReturn = 0;
-      let validTickers = 0;
-      
-      sliced.forEach(ticker => {
-        // Check if ticker has valid points
-        if (!ticker.points || ticker.points.length === 0) {
-          console.warn(`⚠️ Skipping ${ticker.symbol}: no valid points`);
-          return;
-        }
-        
-        // Find the closest price point for this ticker at this timestamp
-        const closestPoint = ticker.points.reduce((closest, point) => {
-          const currentDiff = Math.abs(point.timestampValue - timestamp);
-          const closestDiff = Math.abs(closest.timestampValue - timestamp);
-          return currentDiff < closestDiff ? point : closest;
-        });
-        
-        if (closestPoint && closestPoint.price > 0) {
-          let returnPercent = 0;
-          
-          if (index === 0) {
-            // First data point should always show 0% return (baseline)
-            returnPercent = 0;
-          } else {
-            // For subsequent points, calculate return from the first point price
-            const firstPoint = ticker.points[0];
-            if (firstPoint && firstPoint.price > 0) {
-              returnPercent = ((closestPoint.price - firstPoint.price) / firstPoint.price) * 100;
-            }
-          }
-          
-          if (Number.isFinite(returnPercent)) {
-            totalReturn += returnPercent;
-            validTickers++;
-          }
-        }
-      });
-      
-      const averageReturn = validTickers > 0 ? totalReturn / validTickers : 0;
-      
-      return {
-        timestampValue: timestamp,
-        returnPercent: averageReturn,
-        xIndex: index
-      };
-    });
-    // Debug log
-          logger.debug('Chart data points:', chartData);
-    return chartData;
-  }, [portfolioReturnData, mini, JSON.stringify(portfolioReturnData.map(item => ({
-    symbol: item.symbol,
-    buyPrice: item.buyPrice,
-    buyDate: item.buyDate,
-    timeframe: item.timeframe
-  })))]);
+    // PRIORITY 3: Fallback to empty array
+    console.log(`🔍 [WATCHLIST CHART] No data available, returning empty array`);
+    return [];
+  }, [portfolioReturnData, timeframe, watchlistSlug]);
 
   // If no data, show empty chart or nothing if suppressed
   if (!chartData || chartData.length === 0) {
@@ -381,6 +143,26 @@ const WatchlistChart = ({
     yMax = center + 1.0;
   }
 
+  const chartDataConfig = {
+    labels: labels,
+    datasets: [
+      {
+        label: 'ETF NAV',
+        data: data,
+        borderColor: (context) => {
+          // Dynamic color based on NAV value
+          const dataIndex = context.dataIndex;
+          const value = data[dataIndex];
+          return value >= 0 ? CRT_GREEN : CRT_RED;
+        },
+        backgroundColor: 'transparent',
+        fill: false,
+        tension: 0.4,
+        borderWidth: 2
+      }
+    ]
+  };
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -392,9 +174,9 @@ const WatchlistChart = ({
         enabled: showTooltip && !mini,
         mode: 'index',
         intersect: false,
-        backgroundColor: 'transparent',
-        titleColor: green,
-        bodyColor: green,
+        backgroundColor: 'rgba(0,0,0,0.9)',
+        titleColor: '#ffffff',
+        bodyColor: '#ffffff',
         borderColor: 'transparent',
         borderWidth: 0,
         displayColors: false,
@@ -432,7 +214,7 @@ const WatchlistChart = ({
             if (!context || !context.parsed) return '';
             const returnValue = context.parsed.y;
             const prefix = returnValue >= 0 ? '+' : '';
-            return `Return: ${prefix}${returnValue.toFixed(2)}%`;
+            return `NAV: ${prefix}${returnValue.toFixed(2)}%`;
           },
           afterLabel: function(context) {
             if (!context || !context[0]) return '';
@@ -453,31 +235,40 @@ const WatchlistChart = ({
           display: false
         },
         ticks: {
-          display: false
+          display: false,
+          color: '#ffffff',
+          font: {
+            family: 'Courier New',
+            size: 10
+          }
         },
         border: {
-          display: false // Remove X-axis border
+          display: false
         }
       },
       y: {
-        display: !mini,
+        display: false,
         grid: {
           display: true,
           color: (context) => {
             // Show only the zero line with low opacity
-            return context.tick.value === 0 ? 'rgba(140, 185, 162, 0.3)' : 'transparent';
+            return context.tick.value === 0 ? 'rgba(255, 255, 255, 0.3)' : 'transparent';
           },
           lineWidth: 1
         },
         ticks: {
           display: false,
-          // Add zero tick to ensure zero line appears
+          color: '#ffffff',
+          font: {
+            family: 'Courier New',
+            size: 10
+          },
           callback: function(value) {
-            return value === 0 ? '0' : '';
+            return value === 0 ? '0%' : `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
           }
         },
         border: {
-          display: false // Remove Y-axis border
+          display: false
         },
         min: yMin,
         max: yMax
@@ -485,36 +276,17 @@ const WatchlistChart = ({
     },
     elements: {
       point: {
-        radius: 0, // Hide all dots
-        hoverRadius: 0, // Hide hover dots too
-        backgroundColor: green,
-        borderColor: black,
-        borderWidth: 1
+        radius: 0,
+        hoverRadius: 0
       },
       line: {
-        borderColor: green,
-        borderWidth: 2,
-        tension: 0.4 // Increased tension for more pronounced curves
+        tension: 0.4
       }
     },
     interaction: {
       intersect: false,
       mode: 'index'
     }
-  };
-
-  const chartDataConfig = {
-    labels: labels,
-    datasets: [
-      {
-        label: 'Portfolio Return',
-        data: data,
-        borderColor: green,
-        backgroundColor: green,
-        fill: false,
-        tension: 0.4 // Increased tension for more pronounced curves
-      }
-    ]
   };
 
   return (

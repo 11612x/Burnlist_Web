@@ -426,7 +426,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
       }}>
         <div style={{ 
           display: 'flex', 
-          alignItems: 'center', 
+          alignItems: 'flex-start', 
           gap: 12
         }}
         title="Test tooltip - hover to see if tooltips work">
@@ -447,8 +447,8 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
               src={isInverted ? logoblack : logo} 
               alt="Burnlist Logo" 
               style={{ 
-                width: 40, 
-                height: 40, 
+                width: 44, 
+                height: 44, 
                 marginRight: 10, 
                 transition: 'filter 0.3s'
               }} 
@@ -456,9 +456,10 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
           </button>
           <strong style={{ 
             fontSize: '170%', 
-            lineHeight: '40px', 
-            display: 'inline-block', 
-            color: green
+            lineHeight: '44px', 
+            display: 'inline-block',
+            color: green,
+            height: '44px'
           }}>BURNLIST v1.1</strong>
         </div>
         <div style={{ 
@@ -491,6 +492,44 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
         gap: '10px',
         marginBottom: '20px'
       }}>
+        <CustomButton
+          onClick={() => navigate('/')}
+          style={{
+            background: location.pathname === '/' ? CRT_GREEN : 'transparent',
+            color: location.pathname === '/' ? '#000000' : CRT_GREEN,
+            border: `1px solid ${CRT_GREEN}`,
+            padding: '9px 18px',
+            fontFamily: "'Courier New', monospace",
+            fontSize: '12px',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            minWidth: '80px',
+            textAlign: 'center'
+          }}
+        >
+          BURNPAGE
+        </CustomButton>
+        
+        <CustomButton
+                      onClick={() => navigate('/screeners')}
+            style={{
+              background: location.pathname === '/screeners' ? CRT_GREEN : 'transparent',
+              color: location.pathname === '/screeners' ? '#000000' : CRT_GREEN,
+            border: `1px solid ${CRT_GREEN}`,
+            padding: '9px 18px',
+            fontFamily: "'Courier New', monospace",
+            fontSize: '12px',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            minWidth: '80px',
+            textAlign: 'center'
+          }}
+        >
+                      SCREENERS
+        </CustomButton>
+        
         <CustomButton
           onClick={() => navigate('/universes')}
           style={{
@@ -527,44 +566,6 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
           }}
         >
           JOURNAL
-        </CustomButton>
-        
-        <CustomButton
-          onClick={() => navigate('/market')}
-          style={{
-            background: location.pathname === '/market' ? CRT_GREEN : 'transparent',
-            color: location.pathname === '/market' ? '#000000' : CRT_GREEN,
-            border: `1px solid ${CRT_GREEN}`,
-            padding: '9px 18px',
-            fontFamily: "'Courier New', monospace",
-            fontSize: '12px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            minWidth: '80px',
-            textAlign: 'center'
-          }}
-        >
-          MARKET
-        </CustomButton>
-        
-        <CustomButton
-          onClick={() => setView(view === 'terminal' ? 'graph' : 'terminal')}
-          style={{
-            background: view === 'graph' ? CRT_GREEN : 'transparent',
-            color: view === 'graph' ? '#000000' : CRT_GREEN,
-            border: `1px solid ${CRT_GREEN}`,
-            padding: '9px 18px',
-            fontFamily: "'Courier New', monospace",
-            fontSize: '12px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            minWidth: '80px',
-            textAlign: 'center'
-          }}
-        >
-          GRAPH VIEW
         </CustomButton>
       </div>
 

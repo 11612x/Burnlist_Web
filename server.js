@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
+import { parse } from 'csv-parse/sync';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,20 +16,19 @@ app.use(cors());
 // Parse JSON bodies
 app.use(express.json());
 
-// API Routes - handle Twelve Data requests directly
+// API Routes - handle all requests
 app.use('/api', async (req, res) => {
   try {
     const { pathname } = new URL(req.url, `http://${req.headers.host}`);
     
+    // Twelve Data Historical Data
     if (pathname === '/twelvedata-historical') {
-      // Handle historical data requests
       const { symbol, start_date, interval = '1day' } = req.query;
       
       if (!symbol || !start_date) {
         return res.status(400).json({ error: 'symbol and start_date are required' });
       }
       
-      // Twelve Data API endpoint
       const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY || '22f43f5ca678492daa17cb74b5bb2a77';
       const url = `https://api.twelvedata.com/time_series?symbol=${symbol}&interval=${interval}&start_date=${start_date}&apikey=${TWELVE_DATA_API_KEY}`;
       
@@ -47,7 +47,6 @@ app.use('/api', async (req, res) => {
       
       console.log(`✅ Historical data fetched for ${symbol}: ${data.values?.length || 0} records`);
       
-      // Transform the response to match the frontend's expected format
       const transformedData = {
         status: 'ok',
         historicalData: data.values?.map(item => ({
@@ -64,15 +63,15 @@ app.use('/api', async (req, res) => {
       
       res.json(transformedData);
       
-    } else if (pathname === '/twelvedata-quote') {
-      // Handle quote requests
+    } 
+    // Twelve Data Quote
+    else if (pathname === '/twelvedata-quote') {
       const { symbols, interval = '1min' } = req.query;
       
       if (!symbols) {
         return res.status(400).json({ error: 'symbols is required' });
       }
       
-      // Twelve Data API endpoint for quotes
       const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY || '22f43f5ca678492daa17cb74b5bb2a77';
       const url = `https://api.twelvedata.com/quote?symbol=${symbols}&apikey=${TWELVE_DATA_API_KEY}`;
       
@@ -92,19 +91,96 @@ app.use('/api', async (req, res) => {
       console.log(`✅ Quote fetched for ${symbols}`);
       res.json(data);
       
-    } else if (pathname === '/health') {
-      // Health check endpoint
+    }
+    // Finviz Quote
+    else if (pathname === '/finviz-quote') {
+      const { ticker, timeframe = 'd' } = req.query;
+      if (!ticker) {
+        return res.status(400).json({ error: 'Ticker is required' });
+      }
+
+      console.log(`🔍 API Request: ${ticker} (${timeframe})`);
+      const FINVIZ_API_TOKEN = process.env.FINVIZ_API_TOKEN || '947b2097-7436-4e8d-bcd9-894fcdebb27b';
+      const url = `https://elite.finviz.com/quote_export.ashx?t=${ticker}&p=${timeframe}&auth=${FINVIZ_API_TOKEN}`;
+
+      try {
+        console.log(`🌐 Fetching from Finviz: ${url}`);
+        const response = await fetch(url);
+        
+        console.log(`📊 Response status: ${response.status} ${response.statusText}`);
+        
+        if (!response.ok) {
+          console.error(`❌ Finviz API error for ${ticker}: ${response.status} ${response.statusText}`);
+          return res.status(500).json({ 
+            error: 'Failed to fetch data from Finviz',
+            ticker: ticker,
+            status: response.status,
+            statusText: response.statusText,
+            url: url
+          });
+        }
+        
+        const csvText = await response.text();
+        console.log(`📈 Raw CSV length for ${ticker}: ${csvText.length} characters`);
+        
+        if (!csvText || csvText.trim().length === 0) {
+          console.error(`❌ Empty CSV response for ${ticker}`);
+          return res.status(500).json({ 
+            error: 'Empty CSV response from Finviz',
+            ticker: ticker
+          });
+        }
+        
+        if (csvText.includes('error') || csvText.includes('Error') || csvText.includes('not found')) {
+          console.error(`❌ Error in CSV for ${ticker}:`, csvText.substring(0, 200));
+          return res.status(500).json({ 
+            error: 'Finviz returned error in CSV',
+            ticker: ticker,
+            details: csvText.substring(0, 200)
+          });
+        }
+
+        const records = parse(csvText, {
+          columns: true,
+          skip_empty_lines: true,
+        });
+
+        console.log(`✅ Parsed ${records.length} records for ${ticker}`);
+        
+        if (records.length === 0) {
+          console.error(`❌ No records parsed for ${ticker}`);
+          return res.status(500).json({ 
+            error: 'No records found in CSV',
+            ticker: ticker,
+            csvLength: csvText.length
+          });
+        }
+
+        res.json(records);
+        
+      } catch (error) {
+        console.error(`❌ Finviz API error for ${ticker}:`, error);
+        res.status(500).json({ 
+          error: 'Finviz API error',
+          details: error.message,
+          ticker: ticker
+        });
+      }
+    }
+    // Health check
+    else if (pathname === '/health') {
       res.json({ 
         status: 'ok', 
         timestamp: new Date().toISOString(),
-        service: 'burnlist-api'
+        service: 'burnlist-api',
+        endpoints: ['/twelvedata-historical', '/twelvedata-quote', '/finviz-quote', '/health']
       });
       
     } else {
       res.status(404).json({ 
         error: 'API endpoint not found',
         path: pathname,
-        available: ['/twelvedata-historical', '/twelvedata-quote', '/health']
+        available: ['/twelvedata-historical', '/twelvedata-quote', '/finviz-quote', '/health']
       });
     }
     

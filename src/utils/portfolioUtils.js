@@ -1,20 +1,23 @@
 import { logger } from './logger';
 
 /**
- * Calculate ETF-like average price for a watchlist
- * This function normalizes prices across different purchase dates to create a meaningful average
+ * Calculate ETF-like average price for a watchlist using NAV baseline approach
+ * This function calculates the current NAV value relative to a baseline, consistent with ETF NAV calculations
  * @param {Array} items - Array of ticker items with buyPrice, buyDate, and historicalData
- * @param {string} baseDate - Optional base date to normalize prices to (defaults to most recent date)
- * @returns {Object} - Object containing average price and metadata
+ * @param {string} timeframe - Timeframe for baseline calculation (D, W, M, YTD, MAX)
+ * @returns {Object} - Object containing NAV price and metadata
  */
-export function calculateETFPrice(items) {
+export function calculateETFPrice(items, timeframe = 'MAX') {
   if (!Array.isArray(items) || items.length === 0) {
     return {
       averagePrice: 0,
       totalValue: 0,
       itemCount: 0,
       priceRange: { min: 0, max: 0 },
-      dateRange: { earliest: null, latest: null }
+      dateRange: { earliest: null, latest: null },
+      totalBuyValue: 0,
+      totalGainLoss: 0,
+      averageGainLossPercent: 0
     };
   }
 
@@ -33,62 +36,89 @@ export function calculateETFPrice(items) {
       totalValue: 0,
       itemCount: 0,
       priceRange: { min: 0, max: 0 },
-      dateRange: { earliest: null, latest: null }
+      dateRange: { earliest: null, latest: null },
+      totalBuyValue: 0,
+      totalGainLoss: 0,
+      averageGainLossPercent: 0
     };
   }
 
-  // Find the most recent date across all items to use as normalization base
-  const allDates = validItems.flatMap(item => 
-    item.historicalData.map(data => new Date(data.timestamp))
-  );
-  const latestDate = new Date(Math.max(...allDates));
-
-  // Calculate normalized prices (what each stock would be worth at the latest date)
-  const normalizedPrices = validItems.map(item => {
-    const buyDate = new Date(item.buyDate);
-    const buyPrice = Number(item.buyPrice);
-    
-    // Find the price at the latest date for this stock
-    let currentPrice = buyPrice; // fallback to buy price
-    
-    // Use currentPrice field if available (from auto-fetch), otherwise use latest historical price
-    if (typeof item.currentPrice === 'number' && item.currentPrice > 0) {
-      currentPrice = item.currentPrice;
-    } else if (item.historicalData && item.historicalData.length > 0) {
-      // Find the most recent price in historical data
-      const sortedData = [...item.historicalData].sort((a, b) => 
-        new Date(b.timestamp) - new Date(a.timestamp)
-      );
-      
-      if (sortedData.length > 0) {
-        currentPrice = Number(sortedData[0].price);
-      }
-    }
-
-    // For P&L calculation, use the actual buy price that should be used for returns
-    // This handles manually changed buy dates where buyPrice reflects the historical price from that date
-    const effectiveBuyPrice = buyPrice;
-    
-    return {
-      symbol: item.symbol,
-      buyPrice,
-      buyDate,
-      currentPrice,
-      normalizedPrice: currentPrice, // For now, use current price as normalized
-      priceChange: currentPrice - effectiveBuyPrice,
-      priceChangePercent: effectiveBuyPrice > 0 ? ((currentPrice - effectiveBuyPrice) / effectiveBuyPrice) * 100 : 0
-    };
+  // Find the baseline price using the same approach as NAV calculator
+  const allTimestamps = new Set();
+  validItems.forEach(item => {
+    item.historicalData.forEach(point => {
+      allTimestamps.add(new Date(point.timestamp).getTime());
+    });
   });
+  
+  const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
+  const baselineTimestamp = sortedTimestamps[0]; // Start of data
+  
+  // Calculate baseline prices for each ticker
+  const baselinePrices = validItems.map(item => {
+    const sortedData = [...item.historicalData].sort((a, b) => 
+      new Date(a.timestamp) - new Date(b.timestamp)
+    );
+    
+    // Find price at baseline timestamp
+    const baselinePoint = findClosestPricePoint(sortedData, new Date(baselineTimestamp));
+    return baselinePoint ? baselinePoint.price : 0;
+  }).filter(price => price > 0);
 
-  // Calculate weighted average based on current market values
-  const totalValue = normalizedPrices.reduce((sum, item) => sum + item.currentPrice, 0);
-  const averagePrice = totalValue / normalizedPrices.length;
+  if (baselinePrices.length === 0) {
+    return {
+      averagePrice: 0,
+      totalValue: 0,
+      itemCount: 0,
+      priceRange: { min: 0, max: 0 },
+      dateRange: { earliest: null, latest: null },
+      totalBuyValue: 0,
+      totalGainLoss: 0,
+      averageGainLossPercent: 0
+    };
+  }
 
+  // Calculate baseline NAV value (average of baseline prices)
+  const baselineNAV = baselinePrices.reduce((sum, price) => sum + price, 0) / baselinePrices.length;
+  
+  // Calculate current prices and NAV value
+  const currentPrices = validItems.map(item => {
+    let currentPrice = item.currentPrice;
+    
+    if (typeof currentPrice !== 'number' || currentPrice <= 0) {
+      // Use latest historical price
+      const sortedData = [...item.historicalData].sort((a, b) => 
+        new Date(a.timestamp) - new Date(b.timestamp)
+      );
+      currentPrice = sortedData.length > 0 ? Number(sortedData[sortedData.length - 1].price) : 0;
+    }
+    
+    return currentPrice;
+  }).filter(price => price > 0);
+
+  if (currentPrices.length === 0) {
+    return {
+      averagePrice: 0,
+      totalValue: 0,
+      itemCount: 0,
+      priceRange: { min: 0, max: 0 },
+      dateRange: { earliest: null, latest: null },
+      totalBuyValue: 0,
+      totalGainLoss: 0,
+      averageGainLossPercent: 0
+    };
+  }
+
+  // Calculate current NAV value (average of current prices)
+  const currentNAV = currentPrices.reduce((sum, price) => sum + price, 0) / currentPrices.length;
+  
+  // Calculate NAV return percentage
+  const navReturnPercent = baselineNAV > 0 ? ((currentNAV - baselineNAV) / baselineNAV) * 100 : 0;
+  
   // Calculate price range
-  const prices = normalizedPrices.map(item => item.currentPrice);
   const priceRange = {
-    min: Math.min(...prices),
-    max: Math.max(...prices)
+    min: Math.min(...currentPrices),
+    max: Math.max(...currentPrices)
   };
 
   // Calculate date range
@@ -99,17 +129,37 @@ export function calculateETFPrice(items) {
   };
 
   return {
-    averagePrice: Number(averagePrice.toFixed(2)),
-    totalValue: Number(totalValue.toFixed(2)),
+    averagePrice: Number(currentNAV.toFixed(2)), // Current NAV value
+    totalValue: Number((currentNAV * validItems.length).toFixed(2)),
     itemCount: validItems.length,
     priceRange,
     dateRange,
-    normalizedPrices,
-    // Additional metrics
-    totalBuyValue: normalizedPrices.reduce((sum, item) => sum + item.buyPrice, 0),
-    totalGainLoss: normalizedPrices.reduce((sum, item) => sum + item.priceChange, 0),
-    averageGainLossPercent: normalizedPrices.reduce((sum, item) => sum + item.priceChangePercent, 0) / normalizedPrices.length
+    // NAV-based metrics
+    totalBuyValue: Number((baselineNAV * validItems.length).toFixed(2)),
+    totalGainLoss: Number(((currentNAV - baselineNAV) * validItems.length).toFixed(2)),
+    averageGainLossPercent: Number(navReturnPercent.toFixed(2))
   };
+}
+
+// Helper function to find closest price point (same as in navCalculator)
+function findClosestPricePoint(sortedData, targetDate) {
+  if (sortedData.length === 0) return null;
+  
+  const targetTime = targetDate.getTime();
+  let closestPoint = sortedData[0];
+  let closestDiff = Math.abs(new Date(closestPoint.timestamp).getTime() - targetTime);
+  
+  for (const point of sortedData) {
+    const pointTime = new Date(point.timestamp).getTime();
+    const diff = Math.abs(pointTime - targetTime);
+    
+    if (diff < closestDiff) {
+      closestDiff = diff;
+      closestPoint = point;
+    }
+  }
+  
+  return closestPoint;
 }
 
 /**

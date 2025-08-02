@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { fetchManager } from '@data/twelvedataFetchManager';
 import normalizeTicker from "@data/normalizeTicker";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
@@ -7,7 +7,7 @@ import WatchlistChart from "@components/WatchlistChart";
 import TimeframeSelector from "@components/TimeframeSelector";
 import TickerTable from "@components/TickerTable";
 import AddTickerInput from "@components/AddTickerInput";
-import { useAverageReturn } from "@hooks/useAverageReturn";
+import navCalculator from '../data/navCalculator';
 
 import NotificationBanner from '@components/NotificationBanner';
 import CustomButton from '@components/CustomButton';
@@ -18,7 +18,7 @@ import { calculateETFPrice, calculateTWAP, calculatePortfolioBeta } from '../uti
 import useNotification from '../hooks/useNotification';
 import { logger } from '../utils/logger';
 
-const CRT_GREEN = 'rgb(140,185,162)';
+const CRT_GREEN = 'rgb(149,184,163)';
 
 // Helper function to convert confidence percentage to descriptive label
 const getConfidenceLabel = (confidence) => {
@@ -59,7 +59,6 @@ const BurnPage = () => {
     logger.log("🎯 [BURN PAGE] selectedTimeframe changed to:", selectedTimeframe);
   }, [selectedTimeframe]);
 
-
   const [watchlist, setWatchlist] = useState(null);
   const [watchlists, setWatchlists] = useState({});
   const [bulkSymbols, setBulkSymbols] = useState("");
@@ -71,11 +70,74 @@ const BurnPage = () => {
   const { isInverted } = useTheme();
   const [countdown, setCountdown] = useState(null);
 
-  // Calculate average return for the current watchlist
-  const averageReturn = useAverageReturn(watchlist?.items || [], selectedTimeframe);
+  // Add debugging for timeframe changes - MOVED AFTER VARIABLE DECLARATIONS
+  useEffect(() => {
+    logger.log(`🔍 [TIMEFRAME CHANGE DEBUG] selectedTimeframe changed to: ${selectedTimeframe}`);
+    logger.log(`🔍 [TIMEFRAME CHANGE DEBUG] watchlist items count: ${watchlist?.items?.length || 0}`);
+    
+    if (watchlist?.items && watchlist.items.length > 0) {
+      logger.log(`🔍 [TIMEFRAME CHANGE DEBUG] First item: ${watchlist.items[0].symbol}`);
+      logger.log(`🔍 [TIMEFRAME CHANGE DEBUG] Historical data points: ${watchlist.items[0].historicalData?.length || 0}`);
+      
+      // Test NAV calculation for first item
+      try {
+        const firstItem = watchlist.items[0];
+        const navCalculator = require('../data/navCalculator').default;
+        const dynamicBuyPrice = navCalculator.calculateDynamicBuyPrice(firstItem, selectedTimeframe);
+        logger.log(`🔍 [TIMEFRAME CHANGE DEBUG] Dynamic buy price for ${firstItem.symbol}: $${dynamicBuyPrice}`);
+      } catch (error) {
+        logger.error(`🔍 [TIMEFRAME CHANGE DEBUG] Error testing NAV calculation:`, error);
+      }
+    }
+  }, [selectedTimeframe, watchlist]);
+
+  // NEW NAV CALCULATION: Calculate average return using NAV calculator
+  const averageReturn = useMemo(() => {
+    if (!watchlist?.items || watchlist.items.length === 0) return 0;
+    
+    try {
+      // Calculate NAV performance for the current timeframe
+      const navData = navCalculator.calculateNAVPerformance(watchlist.items, selectedTimeframe);
+      
+      if (navData && navData.length > 0) {
+        // Get the latest NAV value
+        const latestNav = navData[navData.length - 1];
+        logger.log(`🔍 [BURN PAGE NAV DEBUG] Latest NAV return: ${latestNav.returnPercent}%`);
+        return latestNav.returnPercent;
+      }
+      
+      // Fallback: calculate simple average of individual ticker returns
+      let totalReturn = 0;
+      let validTickers = 0;
+      
+      watchlist.items.forEach(item => {
+        try {
+          const buyPrice = navCalculator.calculateDynamicBuyPrice(item, selectedTimeframe);
+          const currentPrice = item.currentPrice || (item.historicalData && item.historicalData.length > 0 ? 
+            item.historicalData[item.historicalData.length - 1].price : 0);
+          
+          if (buyPrice > 0 && currentPrice > 0) {
+            const tickerReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
+            totalReturn += tickerReturn;
+            validTickers++;
+          }
+        } catch (error) {
+          logger.error(`Error calculating return for ${item.symbol}:`, error);
+        }
+      });
+      
+      const average = validTickers > 0 ? totalReturn / validTickers : 0;
+      logger.log(`🔍 [BURN PAGE NAV DEBUG] Fallback average return: ${average.toFixed(2)}%`);
+      return average;
+      
+    } catch (error) {
+      logger.error('Error calculating NAV average return:', error);
+      return 0;
+    }
+  }, [watchlist?.items, selectedTimeframe]);
   
   // Calculate ETF-like average price for the watchlist
-  const etfPriceData = calculateETFPrice(watchlist?.items || []);
+  const etfPriceData = calculateETFPrice(watchlist?.items || [], selectedTimeframe);
   const twapData = calculateTWAP(watchlist?.items || []);
   const betaData = calculatePortfolioBeta(watchlist?.items || [], selectedTimeframe);
 
@@ -1040,10 +1102,10 @@ const BurnPage = () => {
               {Number.isFinite(averageReturn) ? `${averageReturn.toFixed(2)}%` : "–%"} ({selectedTimeframe?.toUpperCase() || "N/A"})
             </div>
             <div style={{ 
-              color: etfPriceData.totalGainLoss >= 0 ? CRT_GREEN : '#e31507',
+              color: averageReturn >= 0 ? CRT_GREEN : '#e31507',
               fontWeight: 'bold'
             }}>
-              P&L: ${etfPriceData.totalGainLoss.toFixed(2)} ({etfPriceData.averageGainLossPercent.toFixed(2)}%)
+              P&L: ${etfPriceData.totalGainLoss.toFixed(2)} ({averageReturn.toFixed(2)}%)
             </div>
           </div>
         </div>
@@ -1102,14 +1164,32 @@ const BurnPage = () => {
 }}>
         <MobileChartWrapper height={505} style={{}}>
           <WatchlistChart 
-            portfolioReturnData={watchlist.items?.map(item => ({
-              symbol: item.symbol,
-              buyDate: item.buyDate,
-              buyPrice: item.buyPrice,
-              historicalData: item.historicalData,
-              timeframe: selectedTimeframe
-            })) || []} 
+            portfolioReturnData={(() => {
+              const data = watchlist.items?.map(item => ({
+                symbol: item.symbol,
+                buyDate: item.buyDate,
+                buyPrice: item.buyPrice,
+                historicalData: item.historicalData,
+                timeframe: selectedTimeframe
+              })) || [];
+              
+              // 🔍 LEVEL 1 DEBUG: Portfolio Data Creation
+              logger.log(`🔍 [PORTFOLIO DATA DEBUG] Timeframe: ${selectedTimeframe}`);
+              logger.log(`  - Watchlist items: ${watchlist?.items?.length || 0}`);
+              logger.log(`  - Portfolio data entries: ${data.length}`);
+              
+              if (data.length > 0) {
+                const firstItem = data[0];
+                logger.log(`  - First item: ${firstItem.symbol}`);
+                logger.log(`  - Historical data points: ${firstItem.historicalData?.length || 0}`);
+                logger.log(`  - Buy price: $${firstItem.buyPrice}`);
+                logger.log(`  - Buy date: ${firstItem.buyDate}`);
+              }
+              
+              return data;
+            })()} 
             watchlistSlug={slug}
+            timeframe={selectedTimeframe}
             showBacktestLine={false} 
             height={500}
             suppressEmptyMessage={true}
