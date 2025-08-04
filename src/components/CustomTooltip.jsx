@@ -8,6 +8,7 @@ const CustomTooltip = ({ active, payload, label }) => {
     let timePart = "";
     let returnValue = payload[0].value;
     let additionalInfo = "";
+    let navMetadata = null;
     
     if (payload && payload[0] && payload[0].payload && payload[0].payload.timestampValue) {
       const dt = new Date(payload[0].payload.timestampValue);
@@ -30,6 +31,9 @@ const CustomTooltip = ({ active, payload, label }) => {
       if (payload[0].payload.xIndex !== undefined) {
         additionalInfo = `Point ${payload[0].payload.xIndex + 1}`;
       }
+      
+      // Extract NAV metadata if available
+      navMetadata = payload[0].payload.navMetadata;
     }
 
     // Determine return color based on value
@@ -46,6 +50,7 @@ const CustomTooltip = ({ active, payload, label }) => {
           fontFamily: 'Courier New',
           fontSize: '12px',
           minWidth: '160px',
+          maxWidth: '280px',
           boxShadow: '0 4px 12px rgba(0,0,0,0.8)',
           zIndex: 10000,
         }}
@@ -59,6 +64,9 @@ const CustomTooltip = ({ active, payload, label }) => {
           textAlign: 'center'
         }}>
           {returnPrefix}{returnValue.toFixed(2)}%
+          {navMetadata?.anomaly && (
+            <span style={{ color: '#ff6b35', marginLeft: '6px' }}>⚠</span>
+          )}
         </div>
         
         {/* Date and Time */}
@@ -78,6 +86,66 @@ const CustomTooltip = ({ active, payload, label }) => {
         }}>
           {timePart}
         </div>
+
+        {/* NAV Metadata Section */}
+        {navMetadata && (
+          <>
+            <div style={{ 
+              borderTop: `1px solid ${CRT_GREEN}`,
+              paddingTop: '6px',
+              marginTop: '6px'
+            }}>
+              {/* Confidence Score */}
+              <div style={{ 
+                color: navMetadata.confidenceScore >= 0.7 ? CRT_GREEN : '#ff6b35', 
+                fontSize: '10px',
+                margin: '2px 0'
+              }}>
+                Confidence: {(navMetadata.confidenceScore || 0).toFixed(2)}
+              </div>
+              
+              {/* Ticker Counts */}
+              <div style={{ 
+                color: '#ccc', 
+                fontSize: '10px',
+                margin: '2px 0'
+              }}>
+                {navMetadata.fullWeightTickers || 0}/{navMetadata.validTickers || 0}/{navMetadata.totalTickers || 0} tickers
+              </div>
+              
+              {/* Market Status */}
+              <div style={{ 
+                color: navMetadata.marketStatus === 'open' ? CRT_GREEN : '#888', 
+                fontSize: '10px',
+                margin: '2px 0'
+              }}>
+                Market: {navMetadata.marketStatus || 'unknown'}
+              </div>
+              
+              {/* Drift Warning */}
+              {navMetadata.driftWarning && (
+                <div style={{ 
+                  color: '#ff6b35', 
+                  fontSize: '10px',
+                  margin: '2px 0'
+                }}>
+                  ⚠ Drift: {navMetadata.driftAmount >= 0 ? '+' : ''}{navMetadata.driftAmount.toFixed(1)}%
+                </div>
+              )}
+              
+              {/* Inactive Tickers Warning */}
+              {navMetadata.inactiveTickers && navMetadata.inactiveTickers.length > 0 && (
+                <div style={{ 
+                  color: '#ff6b35', 
+                  fontSize: '10px',
+                  margin: '2px 0'
+                }}>
+                  ⚠ {navMetadata.inactiveTickers.length} inactive
+                </div>
+              )}
+            </div>
+          </>
+        )}
         
         {/* Additional Info if available */}
         {additionalInfo && (
