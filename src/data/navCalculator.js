@@ -5,6 +5,44 @@ class NAVCalculator {
     // Trading hours for NYC (04:00-20:00 EST)
     this.nycOpenHour = 4; // 04:00 EST
     this.nycCloseHour = 20; // 20:00 EST
+    
+    // Data quality thresholds
+    this.MIN_DATA_COVERAGE = 0.7; // 70% minimum ticker coverage
+    this.TIMESTAMP_TOLERANCE = 5; // ±5 minutes tolerance
+    
+    // Real timestamp extraction settings
+    this.MIN_TIMESTAMP_COVERAGE = 0.8; // 80% of tickers must have data at timestamp
+    this.MAX_TIMESTAMP_GAP = 15; // Maximum gap in minutes between timestamps
+    
+    // Fallback configuration
+    this.fallbackStrategy = 'carry_forward'; // 'carry_forward', 'interpolated', 'bootstrapped'
+    this.enableDataQualityScoring = true;
+    this.minDataQualityScore = 0.6; // Minimum quality score for ticker inclusion
+    
+    // Advanced reliability settings
+    this.enableAnchoredSampling = true; // Lock ticker set at timeframe start
+    this.enableConfidenceScoring = true; // Calculate confidence scores
+    this.enableMarketAwareFallback = true; // Market-aware fallback logic
+    this.enableAnomalyDetection = true; // Detect statistical anomalies
+    
+    // Confidence thresholds
+    this.MIN_CONFIDENCE_SCORE = 0.5; // Minimum confidence for reliable NAV
+    this.HIGH_CONFIDENCE_THRESHOLD = 0.8; // High confidence threshold
+    
+    // Anomaly detection thresholds
+    this.MAX_VOLATILITY_THRESHOLD = 0.15; // 15% max volatility
+    this.MIN_COVERAGE_FOR_HIGH_CONFIDENCE = 0.8; // 80% coverage needed for high confidence
+    this.MAX_SINGLE_TICKER_WEIGHT = 0.3; // No single ticker > 30% weight
+    
+    // Cohort-based NAV settings
+    this.FULL_WEIGHT = 1.0; // Weight for tickers with valid data
+    this.FALLBACK_WEIGHT = 0.5; // Weight for tickers using fallback data
+    this.MIN_COHORT_SIZE = 2; // Minimum tickers required for valid cohort
+    this.ANOMALY_THRESHOLD = 0.5; // Mark as anomaly if <50% tickers have full weight
+    
+    // Drift detection settings
+    this.DRIFT_WARNING_THRESHOLD = 1.5; // ±1.5% drift threshold for warning
+    this.INACTIVE_TICKER_THRESHOLD = 1; // 1 trading day for inactive ticker detection
   }
 
   /**
@@ -82,9 +120,39 @@ class NAVCalculator {
         // Calculate average NAV return for this timestamp
         const averageReturn = validTickers > 0 ? totalReturn / validTickers : 0;
         
+        // Calculate unweighted average for drift detection
+        const unweightedData = this.calculateUnweightedAverage(portfolioData, timestamp, timeframe);
+        
+        // Detect drift warning
+        const driftAmount = Math.abs(averageReturn - unweightedData.unweightedAverage);
+        const driftWarning = driftAmount > this.DRIFT_WARNING_THRESHOLD;
+        
+        // Calculate confidence score (simplified for this version)
+        const dataCoverage = validTickers / portfolioData.length;
+        const confidenceScore = Math.min(1.0, dataCoverage * 1.2); // Boost coverage-based confidence
+        
+        // Detect inactive tickers
+        const inactiveTickers = this.getInactiveTickers(portfolioData, timestamp);
+        
         navDataPoints.push({
           timestamp: timestamp,
-          returnPercent: averageReturn
+          returnPercent: averageReturn,
+          // Enhanced metadata for UI
+          confidenceScore: confidenceScore,
+          validTickers: validTickers,
+          totalTickers: portfolioData.length,
+          dataCoverage: dataCoverage,
+          fallbackTickers: unweightedData.fallbackCount,
+          fullWeightTickers: validTickers - unweightedData.fallbackCount,
+          anomaly: confidenceScore < 0.5, // Simple anomaly detection
+          marketStatus: this.getMarketStatus(timestamp),
+          // Drift detection
+          unweightedAverage: unweightedData.unweightedAverage,
+          driftWarning: driftWarning,
+          driftAmount: driftAmount,
+          // Inactive ticker tracking
+          inactiveTickers: inactiveTickers,
+          tickerResults: unweightedData.tickerResults
         });
       }
       
@@ -537,6 +605,157 @@ class NAVCalculator {
     logger.log(`  - NAV Summary: ${validTickers} valid, ${skippedTickers} skipped, NAV = ${navValue.toFixed(2)}%`);
     
     return navValue;
+  }
+
+  /**
+   * Calculate unweighted average for drift detection
+   * @param {Array} portfolioData - Array of ticker data
+   * @param {number} timestamp - Target timestamp
+   * @param {string} timeframe - Timeframe
+   * @returns {Object} Unweighted calculation results
+   */
+  calculateUnweightedAverage(portfolioData, timestamp, timeframe) {
+    let totalReturn = 0;
+    let validTickers = 0;
+    let fallbackCount = 0;
+    const tickerResults = [];
+    
+    for (const ticker of portfolioData) {
+      try {
+        const tickerPrice = this.findClosestPricePoint(ticker.historicalData, new Date(timestamp));
+        const tickerBuyPrice = this.calculateDynamicBuyPrice(ticker, timeframe);
+        
+        if (tickerPrice && tickerPrice.price > 0 && tickerBuyPrice > 0) {
+          const tickerReturn = ((tickerPrice.price - tickerBuyPrice) / tickerBuyPrice) * 100;
+          if (Number.isFinite(tickerReturn)) {
+            totalReturn += tickerReturn;
+            validTickers++;
+            
+            // Track if this ticker is using recent data or fallback
+            const dataAge = timestamp - new Date(tickerPrice.timestamp).getTime();
+            const isFallback = dataAge > (24 * 60 * 60 * 1000); // >1 day old
+            if (isFallback) fallbackCount++;
+            
+            tickerResults.push({
+              symbol: ticker.symbol,
+              return: tickerReturn,
+              price: tickerPrice.price,
+              buyPrice: tickerBuyPrice,
+              isFallback: isFallback,
+              dataAge: dataAge
+            });
+          }
+        }
+      } catch (error) {
+        // Skip errored tickers
+      }
+    }
+    
+    const unweightedAverage = validTickers > 0 ? totalReturn / validTickers : 0;
+    
+    return {
+      unweightedAverage,
+      validTickers,
+      fallbackCount,
+      tickerResults
+    };
+  }
+
+  /**
+   * Get inactive tickers (no updates in >1 trading day)
+   * @param {Array} portfolioData - Array of ticker data
+   * @param {number} timestamp - Current timestamp
+   * @returns {Array} Array of inactive ticker symbols with last update info
+   */
+  getInactiveTickers(portfolioData, timestamp) {
+    const inactiveTickers = [];
+    const oneTradingDay = 24 * 60 * 60 * 1000; // 1 day in milliseconds
+    
+    for (const ticker of portfolioData) {
+      if (!ticker.historicalData || ticker.historicalData.length === 0) continue;
+      
+      // Find most recent data point
+      const sortedData = [...ticker.historicalData].sort((a, b) => 
+        new Date(b.timestamp) - new Date(a.timestamp)
+      );
+      const latestDataPoint = sortedData[0];
+      
+      if (latestDataPoint) {
+        const dataAge = timestamp - new Date(latestDataPoint.timestamp).getTime();
+        if (dataAge > oneTradingDay) {
+          inactiveTickers.push({
+            symbol: ticker.symbol,
+            lastUpdate: latestDataPoint.timestamp,
+            daysInactive: Math.floor(dataAge / oneTradingDay)
+          });
+        }
+      }
+    }
+    
+    return inactiveTickers;
+  }
+
+  /**
+   * Get market status for timestamp
+   * @param {number} timestamp - Target timestamp
+   * @returns {string} Market status ('open', 'closed', 'pre_market', 'after_hours')
+   */
+  getMarketStatus(timestamp) {
+    const date = new Date(timestamp);
+    const easternTime = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const dayOfWeek = easternTime.getDay();
+    const hour = easternTime.getHours();
+    const minute = easternTime.getMinutes();
+    
+    // Weekend
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      return 'closed';
+    }
+    
+    // Market hours: 9:30 AM - 4:00 PM ET
+    const marketOpen = 9 * 60 + 30; // 9:30 AM
+    const marketClose = 16 * 60; // 4:00 PM
+    const currentTime = hour * 60 + minute;
+    
+    if (currentTime >= marketOpen && currentTime <= marketClose) {
+      return 'open';
+    } else if (currentTime < marketOpen) {
+      return 'pre_market';
+    } else {
+      return 'after_hours';
+    }
+  }
+
+  /**
+   * Export NAV series data to JSON
+   * @param {Array} navDataPoints - NAV data points
+   * @param {string} watchlistSlug - Watchlist identifier
+   * @param {string} timeframe - Timeframe
+   * @returns {Object} Exportable data structure
+   */
+  exportNAVSeries(navDataPoints, watchlistSlug, timeframe) {
+    return {
+      metadata: {
+        watchlistSlug: watchlistSlug,
+        timeframe: timeframe,
+        exportedAt: new Date().toISOString(),
+        totalPoints: navDataPoints.length
+      },
+      navSeries: navDataPoints.map(point => ({
+        timestamp: new Date(point.timestamp).toISOString(),
+        navValue: Number(point.returnPercent.toFixed(4)),
+        confidenceScore: Number((point.confidenceScore || 0).toFixed(3)),
+        validTickers: point.validTickers || 0,
+        totalCohort: point.totalTickers || 0,
+        fallbackCount: point.fallbackTickers || 0,
+        anomaly: point.anomaly || false,
+        marketStatus: point.marketStatus || 'unknown',
+        unweightedAverage: Number((point.unweightedAverage || 0).toFixed(4)),
+        driftWarning: point.driftWarning || false,
+        driftAmount: Number((point.driftAmount || 0).toFixed(4)),
+        inactiveTickerCount: point.inactiveTickers ? point.inactiveTickers.length : 0
+      }))
+    };
   }
 }
 

@@ -67,7 +67,20 @@ const WatchlistChart = ({
           return navData.map((datapoint, index) => ({
             timestampValue: new Date(datapoint.timestamp).getTime(),
             returnPercent: datapoint.returnPercent - baselineValue, // Normalize to start at 0%
-            xIndex: index
+            xIndex: index,
+            // Pass NAV metadata for tooltip display
+            navMetadata: {
+              confidenceScore: datapoint.confidenceScore,
+              validTickers: datapoint.validTickers,
+              totalTickers: datapoint.totalTickers,
+              fullWeightTickers: datapoint.fullWeightTickers,
+              fallbackTickers: datapoint.fallbackTickers,
+              anomaly: datapoint.anomaly,
+              marketStatus: datapoint.marketStatus,
+              driftWarning: datapoint.driftWarning,
+              driftAmount: datapoint.driftAmount,
+              inactiveTickers: datapoint.inactiveTickers
+            }
           }));
         }
       } catch (error) {
@@ -150,15 +163,58 @@ const WatchlistChart = ({
         label: 'ETF NAV',
         data: data,
         borderColor: (context) => {
-          // Dynamic color based on NAV value
+          // Dynamic color based on NAV value and confidence
           const dataIndex = context.dataIndex;
           const value = data[dataIndex];
-          return value >= 0 ? CRT_GREEN : CRT_RED;
+          const point = chartData[dataIndex];
+          const confidence = point?.navMetadata?.confidenceScore || 1.0;
+          
+          // Base color
+          const baseColor = value >= 0 ? CRT_GREEN : CRT_RED;
+          
+          // Apply transparency for low confidence
+          if (confidence < 0.7) {
+            return baseColor + '80'; // 50% transparency
+          }
+          
+          return baseColor;
         },
         backgroundColor: 'transparent',
         fill: false,
         tension: 0.4,
-        borderWidth: 2
+        borderWidth: (context) => {
+          // Thinner line for low confidence points
+          const dataIndex = context.dataIndex;
+          const point = chartData[dataIndex];
+          const confidence = point?.navMetadata?.confidenceScore || 1.0;
+          return confidence < 0.7 ? 1 : 2;
+        },
+        segment: {
+          borderDash: (ctx) => {
+            // Dashed line for low confidence segments
+            const point = chartData[ctx.p0DataIndex];
+            const confidence = point?.navMetadata?.confidenceScore || 1.0;
+            return confidence < 0.7 ? [5, 5] : undefined;
+          }
+        },
+        pointRadius: (context) => {
+          // Show warning dots for anomalies
+          const dataIndex = context.dataIndex;
+          const point = chartData[dataIndex];
+          return point?.navMetadata?.anomaly ? 4 : 0;
+        },
+        pointBackgroundColor: (context) => {
+          // Orange warning dots for anomalies
+          const dataIndex = context.dataIndex;
+          const point = chartData[dataIndex];
+          return point?.navMetadata?.anomaly ? '#ff6b35' : 'transparent';
+        },
+        pointBorderColor: (context) => {
+          const dataIndex = context.dataIndex;
+          const point = chartData[dataIndex];
+          return point?.navMetadata?.anomaly ? '#ffffff' : 'transparent';
+        },
+        pointBorderWidth: 1
       }
     ]
   };

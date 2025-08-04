@@ -31,6 +31,27 @@ const TickerRow = ({
   logger.log(`  - Historical data points: ${item?.historicalData?.length || 0}`);
   logger.log(`  - Buy price: $${item?.buyPrice}`);
   logger.log(`  - Current price: $${item?.currentPrice}`);
+
+  // Check if ticker is inactive (no updates in >1 trading day)
+  const isInactive = () => {
+    if (!item.historicalData || item.historicalData.length === 0) return false;
+    
+    const sortedData = [...item.historicalData].sort((a, b) => 
+      new Date(b.timestamp) - new Date(a.timestamp)
+    );
+    const latestDataPoint = sortedData[0];
+    
+    if (latestDataPoint) {
+      const dataAge = Date.now() - new Date(latestDataPoint.timestamp).getTime();
+      const oneTradingDay = 24 * 60 * 60 * 1000; // 1 day in milliseconds
+      return dataAge > oneTradingDay;
+    }
+    return false;
+  };
+
+  const tickerInactive = isInactive();
+  const lastUpdateTime = tickerInactive && item.historicalData && item.historicalData.length > 0 ? 
+    new Date(item.historicalData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0].timestamp) : null;
   
   logger.debug("TickerRow received item:", item);
   logger.debug("Historical Data:", item.historicalData);
@@ -212,7 +233,7 @@ const TickerRow = ({
               alignItems: 'center',
               gap: '4px'
             }}
-            title={`Click to open ${item.symbol} chart in new tab - Last updated: ${lastUpdate}`}
+            title={`Click to open ${item.symbol} chart in new tab - Last updated: ${lastUpdate}${tickerInactive ? `\n⚠ INACTIVE: No data received since ${lastUpdateTime?.toLocaleDateString()} ${lastUpdateTime?.toLocaleTimeString()}. NAV uses last known price.` : ''}`}
           >
             {(() => {
               const totalCount = items.filter((it) => it.symbol === item.symbol).length;
@@ -223,6 +244,23 @@ const TickerRow = ({
               }
               return item.symbol;
             })()}
+            {tickerInactive && (
+              <span
+                style={{
+                  color: '#ff6b35',
+                  fontSize: '10px',
+                  fontWeight: 'bold',
+                  marginLeft: '4px',
+                  padding: '1px 3px',
+                  backgroundColor: 'rgba(255, 107, 53, 0.2)',
+                  borderRadius: '2px',
+                  border: '1px solid #ff6b35'
+                }}
+                title={`⚠ INACTIVE: No data received since ${lastUpdateTime?.toLocaleDateString()} ${lastUpdateTime?.toLocaleTimeString()}. NAV uses last known price.`}
+              >
+                ⚠ INACTIVE
+              </span>
+            )}
           </span>
         )}
       </td>

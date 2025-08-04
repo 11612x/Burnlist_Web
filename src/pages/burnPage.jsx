@@ -7,6 +7,7 @@ import WatchlistChart from "@components/WatchlistChart";
 import TimeframeSelector from "@components/TimeframeSelector";
 import TickerTable from "@components/TickerTable";
 import AddTickerInput from "@components/AddTickerInput";
+import NAVExportButton from "@components/NAVExportButton";
 import navCalculator from '../data/navCalculator';
 
 import NotificationBanner from '@components/NotificationBanner';
@@ -1153,6 +1154,22 @@ const BurnPage = () => {
           etfPriceData={etfPriceData}
           twapData={twapData}
         />
+
+        {/* NAV Export Button - Developer Tool */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          margin: '10px 0',
+          gap: '10px'
+        }}>
+          <NAVExportButton
+            portfolioData={portfolioReturnData}
+            watchlistSlug={slug}
+            timeframe={selectedTimeframe}
+            buttonText="Export NAV Data"
+            devOnly={true}
+          />
+        </div>
 
       </div>
       
