@@ -3,7 +3,9 @@ import activeBurnlistManager from './activeBurnlistManager';
 import historicalDataManager from './historicalDataManager';
 import returnCalculator from './returnCalculator';
 import notificationManager from './notificationManager';
-import navCalculator from './navCalculator';
+import realTimeNavCalculator from './realTimeNavCalculator';
+import navEventEmitter from './navEventEmitter';
+import { logger } from '../utils/logger';
 
 /**
  * Batched Fetch Manager for Twelve Data API
@@ -55,6 +57,9 @@ class BatchedFetchManager {
     this.isRunning = true;
     console.log('🚀 Starting batched fetch manager (3-minute cycles, 9-second intervals)');
     
+    // Start real-time NAV calculator
+    realTimeNavCalculator.start();
+    
     // Verify rate limiting compliance
     this.verifyRateLimitCompliance();
     
@@ -67,6 +72,9 @@ class BatchedFetchManager {
    */
   stop() {
     this.isRunning = false;
+    
+    // Stop real-time NAV calculator
+    realTimeNavCalculator.stop();
     
     // Clear all pending timeouts
     this.cycleTimeouts.forEach(timeout => clearTimeout(timeout));
@@ -182,23 +190,23 @@ class BatchedFetchManager {
     this.batchesInCurrentMinute++;
     this.stats.totalBatches++;
 
-    console.log(`📡 Processing batch ${batchNumber}/${totalBatches}: [${batch.join(', ')}] (${this.batchesInCurrentMinute}/${this.MAX_BATCHES_PER_MINUTE} this minute, ${batch.length} credits)`);
+    logger.fetch(`Batch fetch ${batchNumber}/${totalBatches}`, `[${batch.join(', ')}] (${this.batchesInCurrentMinute}/${this.MAX_BATCHES_PER_MINUTE} this minute, ${batch.length} credits)`);
 
     try {
       // Fetch historical data for each ticker in the batch
       const results = [];
       for (const symbol of batch) {
         try {
-          // Get historical data for the last 24 hours to create chart data points
+          // Get historical data for the last 6 hours to create chart data points
           const endDate = new Date();
-          const startDate = new Date(endDate.getTime() - (24 * 60 * 60 * 1000)); // 24 hours ago
+          const startDate = new Date(endDate.getTime() - (6 * 60 * 60 * 1000)); // 6 hours ago
           
           const historicalData = await fetchHistoricalData(
             symbol, 
             startDate.toISOString().split('T')[0], 
             endDate.toISOString().split('T')[0], 
-            '1h', 
-            24 // Get 24 data points
+            '5min', 
+            72 // Get 72 data points (6 hours * 12 per hour)
           );
           
           if (historicalData) {
@@ -238,6 +246,15 @@ class BatchedFetchManager {
       
       if (updatedItems.length > 0) {
         console.log(`📊 Updated ${updatedItems.length} items in watchlist ${burnlistSlug}`);
+        
+        // Queue real-time NAV calculation for this burnlist
+        const watchlists = JSON.parse(localStorage.getItem('burnlist_watchlists') || '{}');
+        const watchlistKey = Object.keys(watchlists).find(key => watchlists[key].slug === burnlistSlug);
+        
+        if (watchlistKey && watchlists[watchlistKey].items) {
+          const items = watchlists[watchlistKey].items;
+          realTimeNavCalculator.queueAlignedCalculation(burnlistSlug, items, 'MAX');
+        }
       }
     });
   }
@@ -377,8 +394,40 @@ class BatchedFetchManager {
 
       // NEW NAV CALCULATION: Use NAV calculator for timeframe-based returns
       try {
-        // Calculate NAV performance for MAX timeframe (default for historical data)
-        const navData = navCalculator.calculateNAVPerformance(items, 'MAX');
+        // Simple NAV calculation: calculate average of individual ticker returns
+        let totalReturn = 0;
+        let validTickers = 0;
+        
+        items.forEach(item => {
+          try {
+            // Get the buy price from the last element of historical data (oldest price = start date)
+            const buyPrice = item.historicalData && item.historicalData.length > 0 ? 
+              item.historicalData[item.historicalData.length - 1].price : 0;
+            // Get current price from the first element of historical data (most recent price)
+            const currentPrice = item.currentPrice || (item.historicalData && item.historicalData.length > 0 ? 
+              item.historicalData[0].price : 0); // First element = newest price
+            
+            if (buyPrice > 0 && currentPrice > 0) {
+              const tickerReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
+              totalReturn += tickerReturn;
+              validTickers++;
+            }
+          } catch (error) {
+            logger.error(`Error calculating return for ${item.symbol}:`, error);
+          }
+        });
+        
+        const average = validTickers > 0 ? totalReturn / validTickers : 0;
+        
+        // Create simple NAV data structure
+        const navData = [{
+          timestamp: new Date().toISOString(),
+          returnPercent: average,
+          valid: true,
+          source: 'batched',
+          validTickers: validTickers,
+          totalTickers: items.length
+        }];
         
         if (navData && navData.length > 0) {
           // Get the latest NAV value
@@ -398,6 +447,10 @@ class BatchedFetchManager {
           if (saved) {
             console.log(`💾 Saved NEW NAV datapoint for ${burnlistSlug}: ${averageReturn.toFixed(2)}% (${items.length} tickers)`);
           }
+
+          // Emit real-time NAV update event
+          navEventEmitter.emit(burnlistSlug, navData, 'batch');
+          console.log(`📡 Emitted real-time NAV update for ${burnlistSlug}`);
         } else {
           console.log(`⚠️ No NAV data generated for ${burnlistSlug}`);
         }
@@ -633,7 +686,8 @@ class BatchedFetchManager {
       marketHours: {
         isOpen: this.isMarketOpen(),
         currentNYTime: new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })
-      }
+      },
+      realTimeNav: realTimeNavCalculator.getStatus()
     };
   }
 }

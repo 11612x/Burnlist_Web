@@ -1,7 +1,10 @@
+import { findClosestFiveMinutePoint, validateFiveMinuteSpacing } from './historicalDataFetcher';
+import { logger } from '../utils/logger';
+
 class HistoricalDataManager {
   constructor() {
-    this.maxDataPoints = 100; // Keep last 100 datapoints per ticker
-    this.cleanupDays = 30;    // Remove data older than 30 days
+    this.maxDataPoints = 10000; // Increased for 3-year dataset
+    this.cleanupDays = 1095;    // 3 years of data retention
   }
 
   // Save a watchlist datapoint (created after all tickers updated)
@@ -18,9 +21,9 @@ class HistoricalDataManager {
         fetchTimestamp: new Date().toISOString()
       });
       
-      // Keep only last 100 datapoints
-      if (chartData.length > this.maxDataPoints) {
-        chartData = chartData.slice(-this.maxDataPoints);
+      // Keep only last 1000 datapoints (increased for more granular data)
+      if (chartData.length > 1000) {
+        chartData = chartData.slice(-1000);
       }
       
       localStorage.setItem(key, JSON.stringify(chartData));
@@ -34,7 +37,7 @@ class HistoricalDataManager {
   }
 
   // Get chart data for a watchlist
-  getWatchlistChartData(slug, limit = 100) {
+  getWatchlistChartData(slug, limit = 1000) {
     try {
       const key = `burnlist_chart_data_${slug}`;
       const chartData = JSON.parse(localStorage.getItem(key) || '[]');
@@ -45,7 +48,7 @@ class HistoricalDataManager {
     }
   }
 
-  // Save a new price datapoint for a ticker
+  // Save a new price datapoint for a ticker (5-minute aligned)
   savePriceDatapoint(symbol, twelveDataResponse) {
     const { meta, values, status } = twelveDataResponse;
     
@@ -57,17 +60,29 @@ class HistoricalDataManager {
     const latestData = values[0];
     const timestamp = this.convertTwelveDataDateTime(latestData.datetime, meta.exchange_timezone);
     
+    // Ensure 5-minute alignment
+    const alignedTimestamp = this.alignToFiveMinutes(timestamp);
+    
     // Only store close price for datapoints
     const datapoint = {
       price: parseFloat(latestData.close),
-      timestamp: timestamp,
-      fetchTimestamp: new Date().toISOString()
+      timestamp: alignedTimestamp,
+      symbol: symbol
     };
     
     return datapoint;
   }
 
-  // Update historical data for a ticker across all watchlists
+  // Align timestamp to 5-minute intervals
+  alignToFiveMinutes(timestamp) {
+    const date = new Date(timestamp);
+    const minutes = date.getMinutes();
+    const alignedMinutes = Math.floor(minutes / 5) * 5;
+    date.setMinutes(alignedMinutes, 0, 0);
+    return date.toISOString();
+  }
+
+  // Update historical data for a ticker across all watchlists with 5-minute alignment
   updateTickerHistoricalData(symbol, newDatapoint) {
     try {
       const watchlists = JSON.parse(localStorage.getItem('burnlist_watchlists') || '{}');
@@ -77,29 +92,53 @@ class HistoricalDataManager {
         if (watchlist.items) {
           const ticker = watchlist.items.find(item => item.symbol === symbol);
           if (ticker) {
-            // Add new datapoint (close price only)
+            // Ensure historicalData exists
             if (!ticker.historicalData) {
               ticker.historicalData = [];
             }
             
-            ticker.historicalData.push(newDatapoint);
+            // Check if this timestamp already exists (within 5-minute tolerance)
+            const existingIndex = ticker.historicalData.findIndex(point => {
+              const pointTime = new Date(point.timestamp).getTime();
+              const newTime = new Date(newDatapoint.timestamp).getTime();
+              const diffMinutes = Math.abs(pointTime - newTime) / (1000 * 60);
+              return diffMinutes < 5; // 5-minute tolerance
+            });
             
-            // Keep only last 100 datapoints
-            if (ticker.historicalData.length > this.maxDataPoints) {
-              ticker.historicalData = ticker.historicalData.slice(-this.maxDataPoints);
+            if (existingIndex === -1) {
+              // Add new datapoint
+              ticker.historicalData.push(newDatapoint);
+              
+              // Sort by timestamp to maintain chronological order
+              ticker.historicalData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+              
+              // Validate 5-minute spacing
+              if (!validateFiveMinuteSpacing(ticker.historicalData)) {
+                logger.warn(`⚠️ Irregular 5-minute spacing detected for ${symbol} after update`);
+              }
+              
+              // Keep only last maxDataPoints (10,000 for 3-year dataset)
+              if (ticker.historicalData.length > this.maxDataPoints) {
+                ticker.historicalData = ticker.historicalData.slice(-this.maxDataPoints);
+              }
+              
+              // Update current price for return calculations
+              ticker.currentPrice = newDatapoint.price;
+              
+              updated = true;
+            } else {
+              // Update existing point with newer data
+              ticker.historicalData[existingIndex] = newDatapoint;
+              ticker.currentPrice = newDatapoint.price;
+              updated = true;
             }
-            
-            // Update current price for return calculations
-            ticker.currentPrice = newDatapoint.price;
-            
-            updated = true;
           }
         }
       });
       
       if (updated) {
         localStorage.setItem('burnlist_watchlists', JSON.stringify(watchlists));
-        console.log(`💾 Updated historical data for ${symbol} across all watchlists`);
+        console.log(`💾 Updated historical data for ${symbol} across all watchlists (5-minute aligned)`);
       }
       
       return updated;
@@ -121,7 +160,7 @@ class HistoricalDataManager {
   }
 
   // Get historical data for a specific ticker
-  getHistoricalData(symbol, limit = 100) {
+  getHistoricalData(symbol, limit = 10000) {
     try {
       const watchlists = JSON.parse(localStorage.getItem('burnlist_watchlists') || '{}');
       
@@ -141,7 +180,7 @@ class HistoricalDataManager {
     }
   }
 
-  // Calculate average return for a ticker over a timeframe
+  // Calculate average return for a ticker over a timeframe using 5-minute data
   calculateAverageReturn(symbol, timeframe = '1D') {
     try {
       const historicalData = this.getHistoricalData(symbol);
@@ -180,7 +219,7 @@ class HistoricalDataManager {
     }
   }
 
-  // Clean up old historical data
+  // Clean up old historical data (3-year retention)
   cleanupOldData() {
     try {
       const watchlists = JSON.parse(localStorage.getItem('burnlist_watchlists') || '{}');
@@ -195,7 +234,7 @@ class HistoricalDataManager {
             if (ticker.historicalData) {
               const initialLength = ticker.historicalData.length;
               
-              // Remove datapoints older than cleanupDays
+              // Remove datapoints older than cleanupDays (3 years)
               ticker.historicalData = ticker.historicalData.filter(datapoint => {
                 const datapointDate = new Date(datapoint.timestamp);
                 return datapointDate > cutoffDate;
@@ -209,7 +248,7 @@ class HistoricalDataManager {
       
       if (cleanedCount > 0) {
         localStorage.setItem('burnlist_watchlists', JSON.stringify(watchlists));
-        console.log(`🧹 Cleaned up ${cleanedCount} old datapoints`);
+        console.log(`🧹 Cleaned up ${cleanedCount} old datapoints (3-year retention)`);
       }
       
       return cleanedCount;
@@ -229,7 +268,8 @@ class HistoricalDataManager {
         totalDataPoints: 0,
         averageDataPointsPerTicker: 0,
         oldestDataPoint: null,
-        newestDataPoint: null
+        newestDataPoint: null,
+        fiveMinuteAlignedTickers: 0
       };
       
       let oldestTimestamp = Date.now();
@@ -243,6 +283,11 @@ class HistoricalDataManager {
             if (ticker.historicalData && ticker.historicalData.length > 0) {
               stats.tickersWithHistoricalData++;
               stats.totalDataPoints += ticker.historicalData.length;
+              
+              // Check if data is 5-minute aligned
+              if (validateFiveMinuteSpacing(ticker.historicalData)) {
+                stats.fiveMinuteAlignedTickers++;
+              }
               
               // Find oldest and newest timestamps
               ticker.historicalData.forEach(datapoint => {

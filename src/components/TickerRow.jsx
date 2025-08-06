@@ -1,9 +1,8 @@
 /**
  * TickerRow.jsx
  * Patch summary:
- * - Update to use new NAV calculations with dynamic buy prices based on timeframe
- * - Import navCalculator for dynamic buy price calculation
- * - Replace simple return calculation with timeframe-based NAV calculation
+ * - Update to use simple NAV calculations with basic buy prices
+ * - Replace sophisticated NAV calculation with simple return calculation
  */
 import React from "react";
 import { useThemeColor } from '../ThemeContext';
@@ -11,14 +10,13 @@ import { getCachedExchange } from '../utils/exchangeDetector';
 import CustomButton from './CustomButton'; // Added import for CustomButton
 import { formatDateEuropean } from '../utils/dateUtils';
 import { logger } from '../utils/logger';
-import navCalculator from '../data/navCalculator';
 
 const CRT_GREEN = 'rgb(149,184,163)';
 const CRT_RED = '#e31507';
 
 const TickerRow = ({
   item, index, editMode, selectedTimeframe = 'W', // Add selectedTimeframe prop
-  handleChangeSymbol, handleBuyPriceChange, handleBuyDateChange, handleRevertBuyDate, handleFetchHistoricalData, handleDelete, handleRefreshPrice, items, changePercent, lookedUpBuyPrice
+  handleChangeSymbol, handleBuyPriceChange, handleBuyDateChange, handleRevertBuyDate, handleFetchHistoricalData, handleDelete, handleRefreshPrice, items, changePercent, lookedUpBuyPrice, isInactive = false
 }) => {
   const green = useThemeColor(CRT_GREEN);
   const red = useThemeColor(CRT_RED);
@@ -49,15 +47,15 @@ const TickerRow = ({
     // For MAX timeframe, use shared baseline price (same as NAV calculator)
     if (selectedTimeframe === 'MAX' && items && items.length > 0) {
       // Get shared baseline price from NAV calculator
-      buy = navCalculator.getSharedBaselinePrice(items, selectedTimeframe);
+      buy = Number(item.buyPrice); // Assuming item.buyPrice is the baseline for MAX
       logger.log(`🔍 [TICKER ROW SHARED BASELINE] ${item.symbol}: Using shared baseline price = $${buy}`);
     } else {
       // For other timeframes, use individual dynamic buy price
-      buy = navCalculator.calculateDynamicBuyPrice(item, selectedTimeframe);
+      buy = Number(item.buyPrice) || 0;
       logger.log(`🔍 [TICKER ROW INDIVIDUAL BASELINE] ${item.symbol}: Using individual baseline price = $${buy}`);
     }
     
-    // Get current price from historical data
+    // Get current price from historical data (most recent available)
     if (item.historicalData && item.historicalData.length > 0) {
       const first = item.historicalData[0];
       const last = item.historicalData[item.historicalData.length - 1];
@@ -75,7 +73,7 @@ const TickerRow = ({
       }
     }
     
-    // Use currentPrice field if available, otherwise use latest historical price
+    // Use currentPrice field if available (for real-time updates)
     if (typeof item.currentPrice === 'number') {
       currentPrice = item.currentPrice;
     }
@@ -184,12 +182,23 @@ const TickerRow = ({
   return (
     <tr key={index} style={{ borderBottom: `1px solid ${green}`, background: black }}>
       {/* Symbol: editable in edit mode */}
-      <td style={{ padding: 8, fontFamily: "'Courier New', Courier, monospace", color: green, fontSize: 15 }}>
+      <td style={{ 
+        padding: 8, 
+        fontFamily: "'Courier New', Courier, monospace", 
+        color: green, 
+        fontSize: 15,
+        textAlign: 'center'
+      }}
+          title={`Symbol: ${item.symbol} | Type: ${item.type || 'stock'} | Last updated: ${lastUpdate}`}>
         {editMode ? (
           <input
             type="text"
             value={item.symbol}
-            onChange={(e) => handleChangeSymbol(index, e.target.value)}
+            onChange={e => {
+              if (typeof handleChangeSymbol === 'function') {
+                handleChangeSymbol(index, e.target.value);
+              }
+            }}
             style={{
               fontFamily: "'Courier New', Courier, monospace",
               fontSize: "1rem",
@@ -198,7 +207,7 @@ const TickerRow = ({
               color: green,
               padding: 4,
               width: 80,
-              textTransform: "uppercase",
+              textAlign: 'center'
             }}
             title="Edit ticker symbol"
           />
@@ -210,24 +219,49 @@ const TickerRow = ({
               textDecoration: 'underline',
               display: 'flex',
               alignItems: 'center',
-              gap: '4px'
+              gap: '4px',
+              justifyContent: 'center'
             }}
             title={`Click to open ${item.symbol} chart in new tab - Last updated: ${lastUpdate}`}
           >
-            {(() => {
-              const totalCount = items.filter((it) => it.symbol === item.symbol).length;
-              if (totalCount > 1) {
-                const countBefore = items.slice(0, index).filter((it) => it.symbol === item.symbol).length;
-                const stars = "*".repeat(countBefore + 1);
-                return item.symbol + stars;
-              }
-              return item.symbol;
-            })()}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
+              {(() => {
+                const totalCount = items.filter((it) => it.symbol === item.symbol).length;
+                if (totalCount > 1) {
+                  const countBefore = items.slice(0, index).filter((it) => it.symbol === item.symbol).length;
+                  const stars = "*".repeat(countBefore + 1);
+                  return item.symbol + stars;
+                }
+                return item.symbol;
+              })()}
+              {isInactive && (
+                <span
+                  style={{
+                    fontSize: '10px',
+                    color: red,
+                    fontWeight: 'bold',
+                    backgroundColor: 'rgba(227, 21, 7, 0.1)',
+                    padding: '2px 4px',
+                    borderRadius: '2px',
+                    border: `1px solid ${red}`
+                  }}
+                  title="No price update in over 1 trading day"
+                >
+                  ⚠ INACTIVE
+                </span>
+              )}
+            </div>
           </span>
         )}
       </td>
       {/* Buy Price / Start Price: shows baseline price used by NAV calculator */}
-      <td style={{ padding: 8, fontFamily: "'Courier New', Courier, monospace", color: green, fontSize: 15 }}
+      <td style={{ 
+        padding: 8, 
+        fontFamily: "'Courier New', Courier, monospace", 
+        color: green, 
+        fontSize: 15,
+        textAlign: 'center'
+      }}
           title={`${editMode ? 'Stored Buy Price' : 'Baseline Price'}: $${editMode ? (!isNaN(buy) ? buy.toFixed(2) : 'N/A') : (!isNaN(buy) ? buy.toFixed(2) : 'N/A')} | Buy Date: ${item.buyDate}`}>
         {editMode ? (
           <input
@@ -248,6 +282,7 @@ const TickerRow = ({
               color: green,
               padding: 4,
               width: 80,
+              textAlign: 'center'
             }}
           />
         ) : (
@@ -255,10 +290,16 @@ const TickerRow = ({
         )}
       </td>
       {/* Buy Date: editable in edit mode */}
-      <td style={{ padding: 8, fontFamily: "'Courier New', Courier, monospace", color: green, fontSize: 15 }}
+      <td style={{ 
+        padding: 8, 
+        fontFamily: "'Courier New', Courier, monospace", 
+        color: green, 
+        fontSize: 15,
+        textAlign: 'center'
+      }}
           title={`Buy Date: ${item.buyDate} | Formatted: ${formatDateEuropean(item.buyDate)}${item.buyDateMetadata ? ' | Custom date' : ''}`}>
         {editMode ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
             <input
               type="date"
               value={item.buyDate ? item.buyDate.slice(0, 10) : ''}
@@ -275,6 +316,7 @@ const TickerRow = ({
                 color: green,
                 padding: 4,
                 width: 120,
+                textAlign: 'center'
               }}
             />
             {/* Show revert button if buy date has been customized */}
@@ -321,7 +363,7 @@ const TickerRow = ({
             </style>
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
             {formatDateEuropean(item.buyDate)}
             {item.buyDateMetadata && (
               <span style={{ fontSize: '0.8rem', opacity: 0.7 }} title="Custom buy date">⚙</span>
@@ -330,12 +372,24 @@ const TickerRow = ({
         )}
       </td>
       {/* Current Price: always latest price */}
-      <td style={{ padding: 8, fontFamily: "'Courier New', Courier, monospace", color: green, fontSize: 15 }}
+      <td style={{ 
+        padding: 8, 
+        fontFamily: "'Courier New', Courier, monospace", 
+        color: green, 
+        fontSize: 15,
+        textAlign: 'center'
+      }}
           title={`Current Price: $${!isNaN(currentPrice) ? currentPrice.toFixed(2) : 'N/A'} | Last updated: ${lastUpdate}`}>
         {!isNaN(currentPrice) ? currentPrice.toFixed(2) : "-"}
       </td>
       {/* % Change: shows timeframe-specific return with reference date */}
-      <td style={{ padding: 8, fontFamily: "'Courier New', Courier, monospace", color: green, fontSize: 15 }}>
+      <td style={{ 
+        padding: 8, 
+        fontFamily: "'Courier New', Courier, monospace", 
+        color: green, 
+        fontSize: 15,
+        textAlign: 'center'
+      }}>
         {
           (() => {
             const parsedChange = Number(returnPercent);
@@ -349,10 +403,10 @@ const TickerRow = ({
                   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
                   return dayAgo.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                 case 'W':
-                  const weekAgo = navCalculator.getTradingDaysAgo(7);
+                  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
                   return weekAgo.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                 case 'M':
-                  const monthAgo = navCalculator.getTradingDaysAgo(30);
+                  const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
                   return monthAgo.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                 case 'YTD':
                   const jan1 = new Date(now.getFullYear(), 0, 1);
@@ -392,52 +446,30 @@ const TickerRow = ({
         }
       </td>
       {editMode && (
-        <td style={{ padding: 8 }}>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <CustomButton
-              onClick={() => {
-                if (typeof handleFetchHistoricalData === 'function') {
-                  handleFetchHistoricalData(index);
-                }
-              }}
-              style={{
-                background: 'transparent',
-                color: CRT_GREEN,
-                border: `1px solid ${CRT_GREEN}`,
-                fontFamily: "'Courier New', monospace",
-                textTransform: 'lowercase',
-                fontWeight: 400,
-                letterSpacing: 1,
-                boxShadow: 'none',
-                borderRadius: 2,
-                fontSize: '0.8rem',
-                padding: '2px 6px',
-              }}
-              title="Fetch historical data for current buy date"
-            >
-              📊
-            </CustomButton>
-            <CustomButton
-              onClick={() => {
-                if (typeof handleDelete === 'function') {
-                  handleDelete(index);
-                }
-              }}
-              style={{
-                background: 'transparent',
-                color: CRT_RED,
-                border: `1px solid ${CRT_RED}`,
-                fontFamily: "'Courier New', monospace",
-                textTransform: 'lowercase',
-                fontWeight: 400,
-                letterSpacing: 1,
-                boxShadow: 'none',
-                borderRadius: 2,
-              }}
-            >
-              delete
-            </CustomButton>
-          </div>
+        <td style={{ 
+          padding: 8,
+          textAlign: 'center'
+        }}>
+          <CustomButton
+            onClick={() => {
+              if (typeof handleDelete === 'function') {
+                handleDelete(index);
+              }
+            }}
+            style={{
+              background: 'transparent',
+              color: CRT_RED,
+              border: `1px solid ${CRT_RED}`,
+              fontFamily: "'Courier New', monospace",
+              textTransform: 'lowercase',
+              fontWeight: 400,
+              letterSpacing: 1,
+              boxShadow: 'none',
+              borderRadius: 2,
+            }}
+          >
+            delete
+          </CustomButton>
         </td>
       )}
       <td />

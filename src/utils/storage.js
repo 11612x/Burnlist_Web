@@ -3,10 +3,12 @@ const STORAGE_KEYS = {
   WATCHLISTS: 'burnlist_watchlists',
   UNIVERSES: 'burnlist_universes',
   SCREENER_SETTINGS: 'burnlist_screener_settings',
+  SCREENERS: 'burnlist_screeners',
   TRADE_JOURNAL: 'trade_journal_trades',
   FETCH_COUNT: 'burnlist_fetch_count',
   LAST_REFRESH: 'burnlist_last_refresh_',
-  UNIVERSE_TOGGLES: 'universe_toggles_'
+  UNIVERSE_TOGGLES: 'universe_toggles_',
+  CHART_DATA: 'burnlist_chart_data_'
 };
 
 class StorageManager {
@@ -112,6 +114,30 @@ class StorageManager {
 
   setUniverseToggles(ticker, toggles) {
     return this.set(`${STORAGE_KEYS.UNIVERSE_TOGGLES}${ticker}`, toggles);
+  }
+
+  getScreeners() {
+    return this.get(STORAGE_KEYS.SCREENERS, {});
+  }
+
+  setScreeners(screeners) {
+    return this.set(STORAGE_KEYS.SCREENERS, screeners);
+  }
+
+  getFetchCount() {
+    return this.get(STORAGE_KEYS.FETCH_COUNT, 0);
+  }
+
+  setFetchCount(count) {
+    return this.set(STORAGE_KEYS.FETCH_COUNT, count);
+  }
+
+  getChartData(slug) {
+    return this.get(`${STORAGE_KEYS.CHART_DATA}${slug}`, []);
+  }
+
+  setChartData(slug, data) {
+    return this.set(`${STORAGE_KEYS.CHART_DATA}${slug}`, data);
   }
 }
 

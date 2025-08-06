@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme, useThemeColor } from '../ThemeContext';
 import CustomButton from '@components/CustomButton';
+import NavigationBar from '@components/NavigationBar';
 import NotificationBanner from '@components/NotificationBanner';
 import useNotification from '../hooks/useNotification';
 import { logger } from '../utils/logger';
@@ -448,6 +449,8 @@ const ScreenerResultsPage = () => {
           </div>
         </div>
 
+        <NavigationBar />
+
         {/* Navigation */}
         <div style={{
           display: 'flex',
@@ -486,9 +489,7 @@ const ScreenerResultsPage = () => {
                 cursor: isLoading ? 'not-allowed' : 'pointer',
                 textDecoration: 'none',
                 fontWeight: 'bold',
-                '@media (max-width: 768px)': {
-                  fontSize: '20px'
-                }
+
               }}
             >
               {screener.name}
@@ -634,18 +635,13 @@ const ScreenerResultsPage = () => {
             display: 'flex', 
             justifyContent: 'center', 
             pointerEvents: 'none',
-            '@media (max-width: 768px)': {
-              top: 16,
-            }
+
           }}>
             <div style={{ 
               minWidth: 320, 
               maxWidth: 480, 
               pointerEvents: 'auto',
-              '@media (max-width: 768px)': {
-                minWidth: 280,
-                maxWidth: 'calc(100vw - 32px)',
-              }
+
             }}>
               <NotificationBanner
                 message={notification}

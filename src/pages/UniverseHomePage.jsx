@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import NotificationBanner from '@components/NotificationBanner';
 import CustomButton from '@components/CustomButton';
+import NavigationBar from '@components/NavigationBar';
 import { useTheme, useThemeColor } from '../ThemeContext';
 import { formatDateEuropean } from '../utils/dateUtils';
 import useNotification from '../hooks/useNotification';
@@ -236,93 +237,7 @@ const UniverseHomePage = () => {
           </div>
         </div>
 
-        {/* Navigation Buttons */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: '10px 20px',
-          borderBottom: `1px solid ${CRT_GREEN}`,
-          background: 'rgba(0,0,0,0.3)',
-          gap: '10px',
-          marginBottom: '20px'
-        }}>
-          <CustomButton
-            onClick={() => navigate('/')}
-            style={{
-              background: location.pathname === '/' || location.pathname.startsWith('/burn/') ? CRT_GREEN : 'transparent',
-              color: location.pathname === '/' || location.pathname.startsWith('/burn/') ? '#000000' : CRT_GREEN,
-              border: `1px solid ${CRT_GREEN}`,
-              padding: '9px 18px',
-              fontFamily: "'Courier New', monospace",
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              minWidth: '80px',
-              textAlign: 'center'
-            }}
-          >
-            BURNPAGE
-          </CustomButton>
-          
-          <CustomButton
-            onClick={() => navigate('/screeners')}
-            style={{
-              background: location.pathname === '/screeners' ? CRT_GREEN : 'transparent',
-              color: location.pathname === '/screeners' ? '#000000' : CRT_GREEN,
-              border: `1px solid ${CRT_GREEN}`,
-              padding: '9px 18px',
-              fontFamily: "'Courier New', monospace",
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              minWidth: '80px',
-              textAlign: 'center'
-            }}
-          >
-            SCREENERS
-          </CustomButton>
-          
-          <CustomButton
-            onClick={() => navigate('/universes')}
-            style={{
-              background: location.pathname === '/universes' || location.pathname.startsWith('/universe/') ? CRT_GREEN : 'transparent',
-              color: location.pathname === '/universes' || location.pathname.startsWith('/universe/') ? '#000000' : CRT_GREEN,
-              border: `1px solid ${CRT_GREEN}`,
-              padding: '9px 18px',
-              fontFamily: "'Courier New', monospace",
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              minWidth: '80px',
-              textAlign: 'center'
-            }}
-          >
-            UNIVERSE
-          </CustomButton>
-          
-          <CustomButton
-            onClick={() => navigate('/journal')}
-            style={{
-              background: location.pathname === '/journal' ? CRT_GREEN : 'transparent',
-              color: location.pathname === '/journal' ? '#000000' : CRT_GREEN,
-              border: `1px solid ${CRT_GREEN}`,
-              padding: '9px 18px',
-              fontFamily: "'Courier New', monospace",
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              minWidth: '80px',
-              textAlign: 'center'
-            }}
-          >
-            JOURNAL
-          </CustomButton>
-        </div>
+        <NavigationBar />
 
 
 

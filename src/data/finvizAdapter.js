@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { logger } from '../utils/logger';
 
 // Finviz API server endpoint - use Render.com API in production
 const FINVIZ_API_BASE = process.env.NODE_ENV === 'production' 
@@ -9,7 +10,7 @@ export async function fetchQuote(symbol, timeframe = 'd') {
   try {
     symbol = symbol.toUpperCase();
     const url = `${FINVIZ_API_BASE}/finviz-quote?ticker=${symbol}&timeframe=${timeframe}`;
-    console.log(`🌐 Requesting Finviz quote for symbol: ${symbol} (timeframe: ${timeframe})`);
+    logger.fetch(`Finviz quote fetch for ${symbol}`, `timeframe: ${timeframe}`);
     
     const response = await axios.get(url);
     const data = response.data;
@@ -91,7 +92,7 @@ export async function fetchHistoricalData(symbol, timeframe = 'd') {
   try {
     symbol = symbol.toUpperCase();
     const url = `${FINVIZ_API_BASE}/finviz-quote?ticker=${symbol}&timeframe=${timeframe}`;
-    console.log(`🌐 Requesting Finviz historical data for ${symbol} (${timeframe})`);
+    logger.fetch(`Finviz historical data fetch for ${symbol}`, `timeframe: ${timeframe}`);
     
     const response = await axios.get(url);
     const data = response.data;

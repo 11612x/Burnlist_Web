@@ -1,4 +1,4 @@
-import { fetchQuote } from '@data/finhubAdapter';
+import { fetchQuote } from '@data/twelvedataAdapter';
 import { logger } from '../utils/logger';
 import normalizeTicker from '@data/normalizeTicker';
 
@@ -68,9 +68,15 @@ export async function refreshWatchlistData(items, updateFn) {
           return pointDate >= buyDate;
         });
 
+        // Get the most recent price for current price calculation
+        const latestPrice = filteredHistoricalData.length > 0 
+          ? filteredHistoricalData[filteredHistoricalData.length - 1].price 
+          : item.currentPrice || 0;
+
         const updatedTicker = {
           ...item,
           historicalData: filteredHistoricalData,
+          currentPrice: latestPrice, // Update current price with most recent
         };
 
         const normalized = {
@@ -78,7 +84,7 @@ export async function refreshWatchlistData(items, updateFn) {
           buyPrice: item.buyPrice,
           buyDate: item.buyDate,
           type: item.type,
-  
+          currentPrice: latestPrice, // Ensure current price is preserved
           addedAt: item.addedAt,
         };
         logger.log(`✅ Final normalized item for ${item.symbol}:`, normalized);

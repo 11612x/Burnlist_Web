@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme, useThemeColor } from '../ThemeContext';
 import CustomButton from '@components/CustomButton';
+import NavigationBar from '@components/NavigationBar';
 import NotificationBanner from '@components/NotificationBanner';
 import ScreenerCard from '@components/ScreenerCard';
 import ScreenerFormModal from '@components/ScreenerFormModal';
@@ -108,37 +109,19 @@ const ScreenersPage = () => {
       padding: '0' 
     }}>
       {/* Main Content */}
-      <div style={{ 
-        padding: '32px',
-        '@media (max-width: 768px)': {
-          padding: '16px',
-          paddingBottom: '80px', // Account for mobile navigation
-        },
-        '@media (max-width: 480px)': {
-          padding: '12px',
-          paddingBottom: '80px', // Account for mobile navigation
-        }
-      }}>
+      <div style={{ padding: '32px 32px 0 32px' }}>
         {/* Header Section */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          marginBottom: 24,
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '24px',
           flexWrap: 'wrap',
-          gap: '12px',
-          '@media (max-width: 768px)': {
-            flexDirection: 'column',
-            alignItems: 'flex-start',
-            marginBottom: 16,
-          }
+          gap: '12px'
         }}>
           <div style={{ 
             display: 'flex', 
-            alignItems: 'flex-start', 
-            gap: 12,
-            '@media (max-width: 480px)': {
-              gap: 8,
-            }
+            alignItems: 'center'
           }}>
             <button
               onClick={toggleTheme}
@@ -148,8 +131,7 @@ const ScreenersPage = () => {
                 padding: 0,
                 cursor: 'pointer',
                 display: 'flex',
-                alignItems: 'center',
-                minHeight: '44px', // Touch-friendly
+                alignItems: 'center'
               }}
               aria-label="Toggle theme"
             >
@@ -160,13 +142,8 @@ const ScreenersPage = () => {
                   width: 44, 
                   height: 44, 
                   marginRight: 10, 
-                  transition: 'filter 0.3s',
-                  '@media (max-width: 480px)': {
-                    width: 36,
-                    height: 36,
-                    marginRight: 8,
-                  }
-                }} 
+                  transition: 'filter 0.3s'
+                }}
               />
             </button>
             <strong style={{ 
@@ -174,26 +151,13 @@ const ScreenersPage = () => {
               lineHeight: '44px', 
               display: 'inline-block',
               color: green,
-              height: '44px',
-              '@media (max-width: 768px)': {
-                fontSize: '140%',
-                lineHeight: '36px',
-                height: '36px',
-              },
-              '@media (max-width: 480px)': {
-                fontSize: '120%',
-                lineHeight: '32px',
-                height: '32px',
-              }
+              height: '44px'
             }}>BURNLIST v1.1</strong>
           </div>
           <div style={{ 
             display: 'flex', 
             alignItems: 'center', 
-            gap: 10,
-            '@media (max-width: 768px)': {
-              alignSelf: 'flex-end',
-            }
+            gap: 10
           }}>
             <span style={{ color: red, fontWeight: 'bold', fontSize: 12 }}>0</span>
             <span style={{ color: green, fontWeight: 'bold', fontSize: 12 }}>0</span>
@@ -203,93 +167,7 @@ const ScreenersPage = () => {
           </div>
         </div>
 
-        {/* Navigation Buttons */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: '10px 20px',
-          borderBottom: `1px solid ${CRT_GREEN}`,
-          background: 'rgba(0,0,0,0.3)',
-          gap: '10px',
-          marginBottom: '20px'
-        }}>
-          <CustomButton
-            onClick={() => navigate('/')}
-            style={{
-              background: location.pathname === '/' ? CRT_GREEN : 'transparent',
-              color: location.pathname === '/' ? '#000000' : CRT_GREEN,
-              border: `1px solid ${CRT_GREEN}`,
-              padding: '9px 18px',
-              fontFamily: "'Courier New', monospace",
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              minWidth: '80px',
-              textAlign: 'center'
-            }}
-          >
-            BURNPAGE
-          </CustomButton>
-          
-          <CustomButton
-            onClick={() => navigate('/screeners')}
-            style={{
-              background: location.pathname === '/screeners' ? CRT_GREEN : 'transparent',
-              color: location.pathname === '/screeners' ? '#000000' : CRT_GREEN,
-              border: `1px solid ${CRT_GREEN}`,
-              padding: '9px 18px',
-              fontFamily: "'Courier New', monospace",
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              minWidth: '80px',
-              textAlign: 'center'
-            }}
-          >
-            SCREENERS
-          </CustomButton>
-          
-          <CustomButton
-            onClick={() => navigate('/universes')}
-            style={{
-              background: location.pathname === '/universes' || location.pathname.startsWith('/universe/') ? CRT_GREEN : 'transparent',
-              color: location.pathname === '/universes' || location.pathname.startsWith('/universe/') ? '#000000' : CRT_GREEN,
-              border: `1px solid ${CRT_GREEN}`,
-              padding: '9px 18px',
-              fontFamily: "'Courier New', monospace",
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              minWidth: '80px',
-              textAlign: 'center'
-            }}
-          >
-            UNIVERSE
-          </CustomButton>
-          
-          <CustomButton
-            onClick={() => navigate('/journal')}
-            style={{
-              background: location.pathname === '/journal' ? CRT_GREEN : 'transparent',
-              color: location.pathname === '/journal' ? '#000000' : CRT_GREEN,
-              border: `1px solid ${CRT_GREEN}`,
-              padding: '9px 18px',
-              fontFamily: "'Courier New', monospace",
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              minWidth: '80px',
-              textAlign: 'center'
-            }}
-          >
-            JOURNAL
-          </CustomButton>
-        </div>
+        <NavigationBar />
 
         {/* Page Content */}
         <div style={{
@@ -340,28 +218,8 @@ const ScreenersPage = () => {
 
         {/* Centralized Notification Banner */}
         {notification && (
-          <div style={{ 
-            position: 'fixed', 
-            top: 24, 
-            left: 0, 
-            right: 0, 
-            zIndex: 10001, 
-            display: 'flex', 
-            justifyContent: 'center', 
-            pointerEvents: 'none',
-            '@media (max-width: 768px)': {
-              top: 16,
-            }
-          }}>
-            <div style={{ 
-              minWidth: 320, 
-              maxWidth: 480, 
-              pointerEvents: 'auto',
-              '@media (max-width: 768px)': {
-                minWidth: 280,
-                maxWidth: 'calc(100vw - 32px)',
-              }
-            }}>
+          <div className="fixed top-6 left-0 right-0 z-[10001] flex justify-center pointer-events-none md:top-4">
+            <div className="min-w-80 max-w-[480px] pointer-events-auto md:min-w-70 md:max-w-[calc(100vw-32px)]">
               <NotificationBanner
                 message={notification}
                 type={notificationType}

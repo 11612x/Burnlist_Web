@@ -7,16 +7,20 @@ import WatchlistChart from "@components/WatchlistChart";
 import TimeframeSelector from "@components/TimeframeSelector";
 import TickerTable from "@components/TickerTable";
 import AddTickerInput from "@components/AddTickerInput";
-import navCalculator from '../data/navCalculator';
 
 import NotificationBanner from '@components/NotificationBanner';
 import CustomButton from '@components/CustomButton';
+import NavigationBar from '@components/NavigationBar';
 import EditToggleButton from "@components/EditToggleButton";
 import MobileChartWrapper from "@components/MobileChartWrapper";
 import { useTheme } from '../ThemeContext';
 import { calculateETFPrice, calculateTWAP, calculatePortfolioBeta } from '../utils/portfolioUtils';
 import useNotification from '../hooks/useNotification';
 import { logger } from '../utils/logger';
+
+import realTimeNavCalculator from '../data/realTimeNavCalculator';
+import navEventEmitter from '../data/navEventEmitter';
+import RealTimeNavStatus from '../components/RealTimeNavStatus';
 
 const CRT_GREEN = 'rgb(149,184,163)';
 
@@ -82,39 +86,57 @@ const BurnPage = () => {
       // Test NAV calculation for first item
       try {
         const firstItem = watchlist.items[0];
-        const navCalculator = require('../data/navCalculator').default;
-        const dynamicBuyPrice = navCalculator.calculateDynamicBuyPrice(firstItem, selectedTimeframe);
-        logger.log(`🔍 [TIMEFRAME CHANGE DEBUG] Dynamic buy price for ${firstItem.symbol}: $${dynamicBuyPrice}`);
+        logger.log(`🔍 [TIMEFRAME CHANGE DEBUG] First item: ${firstItem.symbol}`);
       } catch (error) {
-        logger.error(`🔍 [TIMEFRAME CHANGE DEBUG] Error testing NAV calculation:`, error);
+        logger.error(`🔍 [TIMEFRAME CHANGE DEBUG] Error testing first item:`, error);
+      }
+      
+      // Special debug for D timeframe
+      if (selectedTimeframe === 'D') {
+        logger.log(`🔍 [D TIMEFRAME DEBUG] Testing D timeframe data availability...`);
+        
+        // Inspect actual historical data
+        logger.log(`🔍 [D TIMEFRAME DEBUG] Watchlist items: ${watchlist.items.length}`);
+        watchlist.items.forEach((item, index) => {
+          logger.log(`🔍 [D TIMEFRAME DEBUG] Item ${index}: ${item.symbol}`);
+          logger.log(`🔍 [D TIMEFRAME DEBUG]   - Historical data points: ${item.historicalData?.length || 0}`);
+          if (item.historicalData && item.historicalData.length > 0) {
+            const firstPoint = item.historicalData[0];
+            const lastPoint = item.historicalData[item.historicalData.length - 1];
+            logger.log(`🔍 [D TIMEFRAME DEBUG]   - First point: ${firstPoint.timestamp} @ $${firstPoint.price}`);
+            logger.log(`🔍 [D TIMEFRAME DEBUG]   - Last point: ${lastPoint.timestamp} @ $${lastPoint.price}`);
+            
+            // Check how many points are from today (last 24 hours)
+            const now = new Date().getTime();
+            const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+            const todayPoints = item.historicalData.filter(point => {
+              const pointTime = new Date(point.timestamp).getTime();
+              return pointTime >= twentyFourHoursAgo;
+            });
+            logger.log(`🔍 [D TIMEFRAME DEBUG]   - Points from last 24h: ${todayPoints.length}`);
+          }
+        });
       }
     }
   }, [selectedTimeframe, watchlist]);
 
-  // NEW NAV CALCULATION: Calculate average return using NAV calculator
+  // NEW NAV CALCULATION: Calculate average return using simple logic
   const averageReturn = useMemo(() => {
     if (!watchlist?.items || watchlist.items.length === 0) return 0;
     
     try {
-      // Calculate NAV performance for the current timeframe
-      const navData = navCalculator.calculateNAVPerformance(watchlist.items, selectedTimeframe);
-      
-      if (navData && navData.length > 0) {
-        // Get the latest NAV value
-        const latestNav = navData[navData.length - 1];
-        logger.log(`🔍 [BURN PAGE NAV DEBUG] Latest NAV return: ${latestNav.returnPercent}%`);
-        return latestNav.returnPercent;
-      }
-      
-      // Fallback: calculate simple average of individual ticker returns
+      // Simple fallback: calculate average of individual ticker returns
       let totalReturn = 0;
       let validTickers = 0;
       
       watchlist.items.forEach(item => {
         try {
-          const buyPrice = navCalculator.calculateDynamicBuyPrice(item, selectedTimeframe);
+          // Get the buy price from the last element of historical data (oldest price = start date)
+          const buyPrice = item.historicalData && item.historicalData.length > 0 ? 
+            item.historicalData[item.historicalData.length - 1].price : 0;
+          // Get current price from the first element of historical data (most recent price)
           const currentPrice = item.currentPrice || (item.historicalData && item.historicalData.length > 0 ? 
-            item.historicalData[item.historicalData.length - 1].price : 0);
+            item.historicalData[0].price : 0); // First element = newest price
           
           if (buyPrice > 0 && currentPrice > 0) {
             const tickerReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
@@ -127,11 +149,11 @@ const BurnPage = () => {
       });
       
       const average = validTickers > 0 ? totalReturn / validTickers : 0;
-      logger.log(`🔍 [BURN PAGE NAV DEBUG] Fallback average return: ${average.toFixed(2)}%`);
+      logger.log(`🔍 [BURN PAGE NAV DEBUG] Average return: ${average.toFixed(2)}%`);
       return average;
       
     } catch (error) {
-      logger.error('Error calculating NAV average return:', error);
+      logger.error('Error calculating average return:', error);
       return 0;
     }
   }, [watchlist?.items, selectedTimeframe]);
@@ -140,6 +162,32 @@ const BurnPage = () => {
   const etfPriceData = calculateETFPrice(watchlist?.items || [], selectedTimeframe);
   const twapData = calculateTWAP(watchlist?.items || []);
   const betaData = calculatePortfolioBeta(watchlist?.items || [], selectedTimeframe);
+
+  // Memoize portfolio return data for chart
+  const portfolioReturnData = useMemo(() => {
+    const data = watchlist?.items?.map(item => ({
+      symbol: item.symbol,
+      buyDate: item.buyDate,
+      buyPrice: item.buyPrice,
+      historicalData: item.historicalData,
+      timeframe: selectedTimeframe
+    })) || [];
+    
+    // 🔍 LEVEL 1 DEBUG: Portfolio Data Creation
+    logger.debug(`[PORTFOLIO DATA DEBUG] Timeframe: ${selectedTimeframe}`);
+    logger.debug(`  - Watchlist items: ${watchlist?.items?.length || 0}`);
+    logger.debug(`  - Portfolio data entries: ${data.length}`);
+    
+    if (data.length > 0) {
+      const firstItem = data[0];
+      logger.debug(`  - First item: ${firstItem.symbol}`);
+      logger.debug(`  - Historical data points: ${firstItem.historicalData?.length || 0}`);
+      logger.debug(`  - Buy price: $${firstItem.buyPrice}`);
+      logger.debug(`  - Buy date: ${firstItem.buyDate}`);
+    }
+    
+    return data;
+  }, [watchlist?.items, selectedTimeframe]);
 
   // Calculate real stock count for header
   const realStockCount = Array.isArray(watchlist?.items)
@@ -172,21 +220,21 @@ const BurnPage = () => {
   // Initialize fetch manager and register watchlist for automatic fetching
   useEffect(() => {
     const initializeFetching = async () => {
-      console.log('🔧 DEBUG: Starting initializeFetching...');
-      console.log('🔧 DEBUG: watchlist:', watchlist);
-      console.log('🔧 DEBUG: slug:', slug);
+          logger.debug('Starting initializeFetching...');
+    logger.debug('watchlist:', watchlist);
+    logger.debug('slug:', slug);
       
       await fetchManager.initialize();
-      console.log('🔧 DEBUG: fetchManager initialized');
+              logger.debug('fetchManager initialized');
       
       // Register this watchlist as active if it has items
       if (watchlist && Array.isArray(watchlist.items) && watchlist.items.length > 0 && slug) {
         const tickers = watchlist.items.map(item => item.symbol);
-        console.log('🔧 DEBUG: About to register tickers:', tickers);
+        logger.debug('About to register tickers:', tickers);
         
         const { default: activeBurnlistManager } = await import('../data/activeBurnlistManager');
         activeBurnlistManager.registerActiveBurnlist(slug, tickers);
-        console.log(`✅ DEBUG: Successfully registered ${slug} as active burnlist with ${tickers.length} tickers: ${tickers.join(', ')}`);
+                  logger.debug(`Successfully registered ${slug} as active burnlist with ${tickers.length} tickers: ${tickers.join(', ')}`);
         
         // Verify registration worked
         const activeBurnlists = activeBurnlistManager.getActiveBurnlists();
@@ -212,6 +260,10 @@ const BurnPage = () => {
   const fetchWatchlistData = async (manual = false, bypassMarketClosed = false) => {
     if (!watchlist || !Array.isArray(watchlist.items)) return;
     
+    if (manual) {
+      logger.fetch(`Watchlist data fetch for ${slug}`, `${watchlist.items.length} items, manual: ${manual}, bypass: ${bypassMarketClosed}`);
+    }
+    
     const result = await fetchManager.startFetch(slug, watchlist.items, (updatedItems, progress) => {
       // Update callback - called after each batch
       const updatedWatchlist = { ...watchlist, items: updatedItems };
@@ -235,30 +287,67 @@ const BurnPage = () => {
   const watchlistFetchStatus = fetchManager.getFetchStatus(slug);
   const isWatchlistFetching = watchlistFetchStatus && watchlistFetchStatus.status === 'active';
 
-  // Manual Refresh Button handler - starts fetch or cancels if active
-  const handleManualRefresh = async () => {
-    console.log('🔧 DEBUG: handleManualRefresh called!');
-    console.log('🔧 DEBUG: isWatchlistFetching:', isWatchlistFetching);
-    
-    if (isWatchlistFetching) {
-      // Cancel the active fetch
-      console.log('🔧 DEBUG: Cancelling active fetch');
-      fetchManager.cancelFetch(slug);
-      setNotification('Fetch cancelled', 'info');
-    } else {
-      // Manual refresh is always allowed (bypassing market hours)
-      if (!isMarketOpen()) {
-        console.log('🔧 DEBUG: Market closed, but allowing manual refresh');
-        setNotification('Manual refresh allowed outside market hours', 'info');
-      }
+  // Subscribe to real-time NAV updates
+  useEffect(() => {
+    if (!slug) return;
+
+    logger.debug(`[BURN PAGE] Subscribing to real-time NAV updates for ${slug}`);
+
+    // Subscribe to NAV updates
+    const unsubscribe = navEventEmitter.subscribe(slug, (navData, metadata) => {
+      logger.debug(`[BURN PAGE] Received NAV update for ${slug}`, metadata);
       
-      console.log('🔧 DEBUG: Calling fetchWatchlistData(true, true)');
-      // Always perform the fetch regardless of market status
-      await fetchWatchlistData(true, true);
+      // Force re-render of chart component
+      setWatchlist(prev => {
+        if (!prev) return prev;
+        return { ...prev, lastUpdate: metadata.timestamp };
+      });
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [slug]);
+
+  // Trigger immediate NAV calculation when tickers are updated
+  const triggerImmediateNavCalculation = async () => {
+    if (!watchlist || !watchlist.items || watchlist.items.length === 0) return;
+
+    try {
+      logger.debug(`[BURN PAGE] Triggering immediate NAV calculation for ${slug}`);
+      await realTimeNavCalculator.triggerImmediateCalculation(slug, watchlist.items, selectedTimeframe);
+    } catch (error) {
+      logger.error(`[BURN PAGE] Error triggering immediate NAV calculation:`, error);
     }
   };
 
+  // Enhanced refresh function with real-time NAV
+  const handleManualRefresh = async () => {
+    if (loading) return;
 
+    try {
+      setLoading(true);
+      setNotification('Refreshing data...', 'loading');
+
+      // Manual refresh is always allowed (bypassing market hours)
+      const result = await fetchWatchlistData(true, true);
+      
+      if (result.success) {
+        setNotification('Manual refresh allowed outside market hours', 'info');
+        logger.fetch(`Manual refresh for ${slug}`, `bypassing market hours check`);
+        
+        // Trigger immediate NAV calculation after refresh
+        await triggerImmediateNavCalculation();
+      } else {
+        setNotification(result.message || 'Refresh failed', 'error');
+      }
+    } catch (error) {
+      console.error('Manual refresh error:', error);
+      setNotification('Refresh failed', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Load watchlist data on mount and listen for updates
   useEffect(() => {
@@ -273,7 +362,8 @@ const BurnPage = () => {
             if (found) {
               found.items = found.items?.map(normalizeTicker);
               found.items = found.items?.filter(item => {
-                const isValid = item && Number(item.buyPrice) > 0 && Array.isArray(item.historicalData) && Number(item.historicalData[0]?.price) > 0;
+                // Temporarily disable strict validation to allow NAV calculation
+                const isValid = item && Number(item.buyPrice) > 0 && Array.isArray(item.historicalData);
                 if (!isValid) {
                   logger.warn("🧨 Invalid item detected during hydration:", item);
                 }
@@ -479,7 +569,7 @@ const BurnPage = () => {
       return;
     }
 
-    logger.log(`📡 Manually fetching historical data for ${ticker.symbol} from ${ticker.buyDate}`);
+    logger.fetch(`Manual historical data fetch for ${ticker.symbol}`, `from ${ticker.buyDate}`);
     
     // Use the existing handleBuyDateChange logic but with current buy date
     await handleBuyDateChange(index, ticker.buyDate.slice(0, 10));
@@ -614,13 +704,32 @@ const BurnPage = () => {
       
       let historicalData;
       try {
+        // Use the most recent available trading day instead of today
+        const mostRecentTradingDay = new Date();
+        // If today is weekend or holiday, go back to Friday
+        const dayOfWeek = mostRecentTradingDay.getDay();
+        if (dayOfWeek === 0) { // Sunday
+          mostRecentTradingDay.setDate(mostRecentTradingDay.getDate() - 2); // Go back to Friday
+        } else if (dayOfWeek === 6) { // Saturday
+          mostRecentTradingDay.setDate(mostRecentTradingDay.getDate() - 1); // Go back to Friday
+        }
+        const endDate = mostRecentTradingDay.toISOString().split('T')[0]; // Just the date part
+        
         // Always use calculated outputsize for precise data point control
-        historicalData = await fetchHistoricalData(ticker.symbol, actualBuyDate, now.toISOString(), interval, outputSize);
-        logger.log(`✅ [HISTORICAL FETCH] API call successful - requested exactly ${outputSize} points with ${interval} interval`);
+        historicalData = await fetchHistoricalData(ticker.symbol, actualBuyDate, endDate, interval, outputSize);
+        logger.log(`✅ [HISTORICAL FETCH] API call successful - requested exactly ${outputSize} points with ${interval} interval from ${actualBuyDate} to ${endDate}`);
       } catch (apiError) {
         logger.warn(`⚠️ [HISTORICAL FETCH] API call failed with ${interval}, trying with 1day fallback:`, apiError);
         // Fallback with conservative daily data
-        historicalData = await fetchHistoricalData(ticker.symbol, actualBuyDate, now.toISOString(), '1day', Math.min(daysDiff, 100));
+        const mostRecentTradingDay = new Date();
+        const dayOfWeek = mostRecentTradingDay.getDay();
+        if (dayOfWeek === 0) {
+          mostRecentTradingDay.setDate(mostRecentTradingDay.getDate() - 2);
+        } else if (dayOfWeek === 6) {
+          mostRecentTradingDay.setDate(mostRecentTradingDay.getDate() - 1);
+        }
+        const endDate = mostRecentTradingDay.toISOString().split('T')[0];
+        historicalData = await fetchHistoricalData(ticker.symbol, actualBuyDate, endDate, '1day', Math.min(daysDiff, 100));
       }
 
       if (!historicalData || !historicalData.historicalData || historicalData.historicalData.length === 0) {
@@ -800,7 +909,7 @@ const BurnPage = () => {
     }
 
     try {
-      logger.log(`🔄 Refreshing price for ${ticker.symbol} at date ${ticker.buyDate}`);
+      logger.fetch(`Price refresh for ${ticker.symbol}`, `buy date: ${ticker.buyDate}`);
       
       // Fetch historical data from Twelve Data API
       logger.log(`📡 Fetching historical data for ${ticker.symbol} from Twelve Data...`);
@@ -1001,74 +1110,7 @@ const BurnPage = () => {
       padding: '0',
       paddingBottom: '80px' // Account for mobile navigation
     }}>
-      {/* Navigation Buttons */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: '10px 20px',
-        borderBottom: `1px solid ${CRT_GREEN}`,
-        background: 'rgba(0,0,0,0.3)',
-        gap: '10px',
-        marginBottom: '20px'
-      }}>
-        <CustomButton
-          onClick={() => navigate('/universes')}
-          style={{
-            background: location.pathname === '/universes' || location.pathname.startsWith('/universe/') ? CRT_GREEN : 'transparent',
-            color: location.pathname === '/universes' || location.pathname.startsWith('/universe/') ? '#000000' : CRT_GREEN,
-            border: `1px solid ${CRT_GREEN}`,
-            padding: '9px 18px',
-            fontFamily: "'Courier New', monospace",
-            fontSize: '12px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            minWidth: '80px',
-            textAlign: 'center'
-          }}
-        >
-          UNIVERSE
-        </CustomButton>
-        
-        <CustomButton
-          onClick={() => navigate('/journal')}
-          style={{
-            background: location.pathname === '/journal' ? CRT_GREEN : 'transparent',
-            color: location.pathname === '/journal' ? '#000000' : CRT_GREEN,
-            border: `1px solid ${CRT_GREEN}`,
-            padding: '9px 18px',
-            fontFamily: "'Courier New', monospace",
-            fontSize: '12px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            minWidth: '80px',
-            textAlign: 'center'
-          }}
-        >
-          JOURNAL
-        </CustomButton>
-        
-        <CustomButton
-          onClick={() => navigate('/')}
-          style={{
-            background: location.pathname === '/' || location.pathname.startsWith('/burn/') ? CRT_GREEN : 'transparent',
-            color: location.pathname === '/' || location.pathname.startsWith('/burn/') ? '#000000' : CRT_GREEN,
-            border: `1px solid ${CRT_GREEN}`,
-            padding: '9px 18px',
-            fontFamily: "'Courier New', monospace",
-            fontSize: '12px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            minWidth: '80px',
-            textAlign: 'center'
-          }}
-        >
-          BURNPAGE
-        </CustomButton>
-      </div>
+      <NavigationBar />
       
       {/* ETF Price Banner - Top of Screen */}
       {etfPriceData && etfPriceData.averagePrice > 0 && (
@@ -1162,32 +1204,43 @@ const BurnPage = () => {
       <div style={{ 
   padding: "5px 20px 10px 20px" // top right bottom left
 }}>
+        {/* Chart Header with Real-time Status */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '10px',
+          flexWrap: 'wrap',
+          gap: '8px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <TimeframeSelector selected={selectedTimeframe} onChange={setSelectedTimeframe} />
+            <EditToggleButton editMode={editMode} setEditMode={setEditMode} />
+            <button
+              onClick={handleManualRefresh}
+              disabled={loading}
+              style={{
+                background: 'transparent',
+                color: CRT_GREEN,
+                border: `1px solid ${CRT_GREEN}`,
+                padding: '4px 8px',
+                fontSize: '10px',
+                fontFamily: "'Courier New'",
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.5 : 1
+              }}
+            >
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+          
+          {/* Real-time NAV Status */}
+          <RealTimeNavStatus watchlistSlug={slug} timeframe={selectedTimeframe} />
+        </div>
+
         <MobileChartWrapper height={505} style={{}}>
           <WatchlistChart 
-            portfolioReturnData={(() => {
-              const data = watchlist.items?.map(item => ({
-                symbol: item.symbol,
-                buyDate: item.buyDate,
-                buyPrice: item.buyPrice,
-                historicalData: item.historicalData,
-                timeframe: selectedTimeframe
-              })) || [];
-              
-              // 🔍 LEVEL 1 DEBUG: Portfolio Data Creation
-              logger.log(`🔍 [PORTFOLIO DATA DEBUG] Timeframe: ${selectedTimeframe}`);
-              logger.log(`  - Watchlist items: ${watchlist?.items?.length || 0}`);
-              logger.log(`  - Portfolio data entries: ${data.length}`);
-              
-              if (data.length > 0) {
-                const firstItem = data[0];
-                logger.log(`  - First item: ${firstItem.symbol}`);
-                logger.log(`  - Historical data points: ${firstItem.historicalData?.length || 0}`);
-                logger.log(`  - Buy price: $${firstItem.buyPrice}`);
-                logger.log(`  - Buy date: ${firstItem.buyDate}`);
-              }
-              
-              return data;
-            })()} 
+            portfolioReturnData={portfolioReturnData} 
             watchlistSlug={slug}
             timeframe={selectedTimeframe}
             showBacktestLine={false} 
@@ -1195,17 +1248,6 @@ const BurnPage = () => {
             suppressEmptyMessage={true}
           />
         </MobileChartWrapper>
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between', 
-        marginBottom: 10,
-        flexWrap: 'wrap',
-        gap: '8px'
-      }}>
-        <TimeframeSelector selected={selectedTimeframe} onChange={setSelectedTimeframe} />
-        <EditToggleButton editMode={editMode} setEditMode={setEditMode} />
-      </div>
       {Array.isArray(watchlist.items) && watchlist.items.length > 0 ? (
         <TickerTable
           items={watchlist.items}

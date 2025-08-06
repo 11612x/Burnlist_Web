@@ -1,5 +1,4 @@
 import { logger } from '../utils/logger';
-import navCalculator from './navCalculator';
 
 class ReturnCalculator {
   constructor() {
@@ -11,24 +10,44 @@ class ReturnCalculator {
     this.notificationCallback = callback;
   }
 
-  // NEW NAV CALCULATION: Calculate average return using NAV calculator with fallback
+  // SIMPLE NAV CALCULATION: Calculate average return using simple logic with fallback
   calculateWatchlistReturn(items, timeframe = 'MAX') {
     try {
       if (!Array.isArray(items) || items.length === 0) {
         return null;
       }
 
-      // Try NEW NAV calculator first
+      // SIMPLE NAV calculation: Use simple fallback logic
       try {
-        const navData = navCalculator.calculateNAVPerformance(items, timeframe);
+        // Simple fallback: calculate average of individual ticker returns
+        let totalReturn = 0;
+        let validTickers = 0;
         
-        if (navData && navData.length > 0) {
-          const latestNav = navData[navData.length - 1];
-          logger.debug(`NEW NAV calculator result (${timeframe}): ${latestNav.returnPercent.toFixed(2)}%`);
-          return latestNav.returnPercent;
-        }
+        items.forEach(item => {
+          try {
+            // Get the buy price from the last element of historical data (oldest price = start date)
+            const buyPrice = item.historicalData && item.historicalData.length > 0 ? 
+              item.historicalData[item.historicalData.length - 1].price : 0;
+            // Get current price from the first element of historical data (most recent price)
+            const currentPrice = item.currentPrice || (item.historicalData && item.historicalData.length > 0 ? 
+              item.historicalData[0].price : 0); // First element = newest price
+            
+            if (buyPrice > 0 && currentPrice > 0) {
+              const tickerReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
+              totalReturn += tickerReturn;
+              validTickers++;
+            }
+          } catch (error) {
+            logger.error(`Error calculating return for ${item.symbol}:`, error);
+          }
+        });
+        
+        const average = validTickers > 0 ? totalReturn / validTickers : 0;
+        logger.debug(`SIMPLE NAV calculator result (${timeframe}): ${average.toFixed(2)}%`);
+        return average;
+        
       } catch (error) {
-        logger.error('Error in NEW NAV calculation, falling back to old method:', error);
+        logger.error('Error in simple NAV calculation, falling back to old method:', error);
       }
 
       // FALLBACK: Use old calculation method

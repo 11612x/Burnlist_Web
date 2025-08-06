@@ -8,22 +8,9 @@ const MobileFormWrapper = ({ children, style = {} }) => {
   const black = useThemeColor('black');
 
   return (
-    <div style={{
-      width: '100%',
+    <div className="w-full bg-black border border-green-500 p-4 flex flex-col gap-4 md:p-3 md:gap-3 sm:p-2 sm:gap-2" style={{
       background: black,
       border: `1px solid ${green}`,
-      padding: '16px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '16px',
-      '@media (max-width: 768px)': {
-        padding: '12px',
-        gap: '12px',
-      },
-      '@media (max-width: 480px)': {
-        padding: '8px',
-        gap: '8px',
-      },
       ...style
     }}>
       {children}

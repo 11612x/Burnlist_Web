@@ -13,6 +13,7 @@ const MobileNavigation = () => {
   const navItems = [
     { path: '/universes', label: 'UNIVERSE' },
     { path: '/journal', label: 'DASHBOARD' },
+    { path: '/market', label: 'MARKET' },
     { path: '/screeners', label: 'SCREENERS' },
     { path: '/', label: 'GRAPH VIEW' },
   ];

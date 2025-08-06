@@ -1,5 +1,5 @@
 import { fetchQuote } from '@data/finhubAdapter';
-
+import { fetchThreeYearHistoricalData, validateFiveMinuteSpacing } from '@data/historicalDataFetcher';
 import { normalizeSymbol } from '@data/tickerUtils';
 import normalizeTicker from '@data/normalizeTicker';
 import { logger } from '../utils/logger';
@@ -17,61 +17,93 @@ export async function createTicker(symbol, type = 'real', customBuyPrice = null,
   try {
     // Handle real ticker via API
     logger.log(`🌐 Fetching real ticker data for ${symbol}`);
-    const ticker = await fetchQuote(symbol);
-    logger.log(`📥 fetchQuote result for ${symbol}:`, ticker ? 'success' : 'failed');
     
-    if (!ticker || typeof ticker !== 'object' || !ticker.symbol || !ticker.historicalData) {
-      logger.warn(`⚠️ Skipping ${symbol}: malformed ticker object`, ticker);
+    // NEW: Fetch 3 years of 5-minute historical data immediately
+    logger.log(`📊 Fetching 3 years of 5-minute historical data for ${symbol}`);
+    const historicalData = await fetchThreeYearHistoricalData(symbol);
+    
+    if (!historicalData || historicalData.length === 0) {
+      logger.warn(`⚠️ No historical data received for ${symbol}`);
       return null;
     }
     
-    logger.log(`✅ Valid ticker data received for ${symbol}, historicalData length: ${ticker.historicalData.length}`);
+    logger.log(`✅ Received ${historicalData.length} historical data points for ${symbol}`);
     
-    // Set buy price: use custom price if provided, otherwise use current market price
-    if (customBuyPrice !== null && !isNaN(Number(customBuyPrice))) {
-      ticker.buyPrice = Number(customBuyPrice);
-      logger.log(`💰 Using custom buy price for ${symbol}: $${ticker.buyPrice}`);
-    } else {
-      // Use current market price as buy price
-      const latestDataPoint = ticker.historicalData[ticker.historicalData.length - 1];
-      ticker.buyPrice = latestDataPoint.price;
-      logger.log(`💰 Using current market price as buy price for ${symbol}: $${ticker.buyPrice}`);
+    // Validate 5-minute spacing
+    if (!validateFiveMinuteSpacing(historicalData)) {
+      logger.warn(`⚠️ Irregular 5-minute spacing detected for ${symbol}`);
     }
     
-    // Set buy date: use custom date if provided, otherwise use current market date
-    if (customBuyDate && !isNaN(Date.parse(customBuyDate))) {
-      ticker.buyDate = customBuyDate;
-      logger.log(`📅 Using custom buy date for ${symbol}: ${ticker.buyDate}`);
-    } else {
-      // Use current market date as buy date
-      const latestDataPoint = ticker.historicalData[ticker.historicalData.length - 1];
-      ticker.buyDate = latestDataPoint.timestamp;
-      logger.log(`📅 Using current market date as buy date for ${symbol}: ${ticker.buyDate}`);
+    // Get current price from the quote endpoint (most recent available price)
+    const latestDataPoint = historicalData[historicalData.length - 1];
+    let currentPrice = latestDataPoint.price;
+    let currentTimestamp = latestDataPoint.timestamp;
+    
+    try {
+      // Fetch current price from quote endpoint to get the most recent available price
+      const { fetchQuote } = await import('@data/twelvedataAdapter');
+      const quoteData = await fetchQuote(symbol);
+      
+      if (quoteData && quoteData.buyPrice) {
+        currentPrice = quoteData.buyPrice;
+        currentTimestamp = quoteData.buyDate;
+        logger.log(`💰 Updated current price for ${symbol}: $${currentPrice} (from quote endpoint)`);
+      } else {
+        logger.warn(`⚠️ Could not fetch current price for ${symbol}, using historical data: $${currentPrice}`);
+      }
+    } catch (error) {
+      logger.warn(`⚠️ Error fetching current price for ${symbol}, using historical data: $${currentPrice}`, error);
     }
     
-    // Only create additional historical data points when custom buy price/date is provided
+    // Create ticker object with comprehensive historical data
+    const ticker = {
+      symbol: symbol,
+      buyPrice: customBuyPrice !== null && !isNaN(Number(customBuyPrice)) 
+        ? Number(customBuyPrice) 
+        : currentPrice,
+      buyDate: customBuyDate && !isNaN(Date.parse(customBuyDate))
+        ? customBuyDate
+        : currentTimestamp,
+      historicalData: historicalData, // Full 3-year dataset
+      currentPrice: currentPrice,
+      addedAt: addedAt,
+      type: 'real'
+    };
+    
+    logger.log(`💰 Buy price for ${symbol}: $${ticker.buyPrice}`);
+    logger.log(`📅 Buy date for ${symbol}: ${ticker.buyDate}`);
+    logger.log(`📊 Historical data points: ${historicalData.length}`);
+    
+    // If custom buy price/date provided, ensure we have that point in historical data
     if ((customBuyPrice !== null && !isNaN(Number(customBuyPrice))) || (customBuyDate && !isNaN(Date.parse(customBuyDate)))) {
-      // Add buy point as first data point
-      const buyPoint = {
+      const customBuyPoint = {
         price: ticker.buyPrice,
         timestamp: ticker.buyDate,
-        fetchTimestamp: new Date().toISOString(),
         symbol: symbol
       };
       
-      // Current market point as second data point
-      const currentPoint = ticker.historicalData[ticker.historicalData.length - 1];
+      // Add custom buy point if it doesn't exist in historical data
+      const buyPointExists = historicalData.some(point => 
+        new Date(point.timestamp).getTime() === new Date(ticker.buyDate).getTime()
+      );
       
-      // Create historical data with both points
-      ticker.historicalData = [buyPoint, currentPoint];
-      logger.log(`📊 Created 2-point historical data for ${symbol}:`, ticker.historicalData);
+      if (!buyPointExists) {
+        historicalData.push(customBuyPoint);
+        // Re-sort to maintain chronological order
+        historicalData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        logger.log(`📊 Added custom buy point to historical data for ${symbol}`);
+      }
     }
-    // Otherwise, keep the single API data point as is
     
-    ticker.addedAt = addedAt;
-    ticker.type = 'real';
     const normalized = normalizeTicker(ticker);
-    logger.log("✅ createTicker returning real:", normalized);
+    logger.log("✅ createTicker returning real ticker with 3-year historical data:", {
+      symbol: normalized.symbol,
+      buyPrice: normalized.buyPrice,
+      buyDate: normalized.buyDate,
+      historicalDataPoints: normalized.historicalData.length,
+      dataRange: `${new Date(normalized.historicalData[0]?.timestamp).toISOString()} to ${new Date(normalized.historicalData[normalized.historicalData.length - 1]?.timestamp).toISOString()}`
+    });
+    
     return normalized;
   } catch (error) {
     logger.error(`❌ createTicker failed for ${symbol}:`, error);

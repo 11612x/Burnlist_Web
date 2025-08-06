@@ -4,17 +4,19 @@ import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 // App pages
 import Home from "@pages/HomePage";
-import BurnPage from "@pages/burnPage";
+import WatchlistPage from "@pages/WatchlistPage";
 // Logging utility
 import { logger } from './utils/logger';
+import { storage } from './utils/storage';
 
 import UniverseScreenerPage from "@pages/UniverseScreenerPage";
 import UniverseHomePage from "@pages/UniverseHomePage";
 import TradeDashboard from './pages/TradeDashboard';
 import TradeJournal from './pages/TradeJournal';
-import AddStockPricePage from './pages/AddStockPricePage';
+import MarketPage from './pages/MarketPage';
 import ScreenersPage from './pages/ScreenersPage';
 import ScreenerResultsPage from './pages/ScreenerResultsPage';
+import BurnPage from './pages/burnPage';
 // Fetch manager for cleanup
 import { fetchManager } from '@data/twelvedataFetchManager';
 import { ThemeProvider } from './ThemeContext';
@@ -22,21 +24,17 @@ import MobileNavigation from './components/MobileNavigation';
 
 
 function App() {
-  // Load watchlists from localStorage or default to empty object
+  // Load watchlists from storage or default to empty object
   const [watchlists, setWatchlists] = useState(() => {
-    try {
-      const saved = localStorage.getItem("burnlist_watchlists");
-      logger.info("💾 Loaded watchlists from localStorage:", saved);
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
+    const saved = storage.getWatchlists();
+    logger.info("💾 Loaded watchlists from storage:", saved);
+    return saved;
   });
 
-  // Persist watchlists to localStorage on changes
+  // Persist watchlists to storage on changes
   useEffect(() => {
-    logger.info("💾 Saving watchlists to localStorage:", watchlists);
-    localStorage.setItem("burnlist_watchlists", JSON.stringify(watchlists));
+    logger.info("💾 Saving watchlists to storage:", watchlists);
+    storage.setWatchlists(watchlists);
   }, [watchlists]);
 
   // Cleanup fetch manager on app unmount
@@ -56,7 +54,7 @@ function App() {
           />
           <Route
             path="/watchlist/:slug"
-            element={<BurnPage watchlists={watchlists} setWatchlists={setWatchlists} />}
+            element={<WatchlistPage watchlists={watchlists} setWatchlists={setWatchlists} />}
           />
 
           {/* Route for Universe Homepage */}
@@ -65,9 +63,10 @@ function App() {
           <Route path="/universe/:slug" element={<UniverseScreenerPage />} />
           <Route path="/trade" element={<TradeDashboard />} />
           <Route path="/journal" element={<TradeJournal />} />
-          <Route path="/add-stock-price" element={<AddStockPricePage />} />
+          <Route path="/market" element={<MarketPage />} />
           <Route path="/screeners" element={<ScreenersPage />} />
           <Route path="/screeners/screener/:screenerSlug" element={<ScreenerResultsPage />} />
+          <Route path="/burn/:slug" element={<BurnPage />} />
         </Routes>
         <MobileNavigation />
       </Router>

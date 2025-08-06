@@ -10,9 +10,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server.js",
-    "start-all": "./start-all.sh",
-    "stop-all": "./stop-all.sh",
-    "start-twelvedata": "./start-twelvedata.sh"
+    "all": "./scripts/all.sh",
+    "start-all": "./scripts/all.sh",
+    "stop-all": "./scripts/stop-all.sh",
+    "start-twelvedata": "./scripts/start-twelvedata.sh"
   },
   "dependencies": {
     "axios": "^1.11.0",

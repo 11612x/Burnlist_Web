@@ -30,11 +30,21 @@ export default defineConfig({
       }
     }
   },
-  define: {
-    __BUILD_TIME__: JSON.stringify(Date.now())
-  },
   server: {
     port: 5173,
-    host: true
+    host: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false
+      }
+    }
+  },
+  esbuild: {
+    sourcemap: false
+  },
+  define: {
+    __BUILD_TIME__: JSON.stringify(Date.now())
   }
 })

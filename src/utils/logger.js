@@ -91,6 +91,23 @@ export const logger = {
     warn: (...args) => isDevelopment && console.warn(...args),
     error: (...args) => console.error(...args),
     info: (...args) => isDevelopment && console.info(...args)
+  },
+
+  // FETCH LOGGING - Always visible, obvious fetch tracking
+  fetch: (reason, details = '') => {
+    const timestamp = new Date().toLocaleTimeString('en-US', { 
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit', 
+      second: '2-digit',
+      fractionalSecondDigits: 3
+    });
+    
+    const message = `✅ ✅ ✅ FETCH ${timestamp} - ${reason}`;
+    const fullMessage = details ? `${message} (${details})` : message;
+    
+    // Always log fetches, even in production
+    console.log(`%c${fullMessage}`, 'color: #00ff00; font-weight: bold; font-size: 14px; background: #000; padding: 2px 4px;');
   }
 };
 

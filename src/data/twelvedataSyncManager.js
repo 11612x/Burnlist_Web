@@ -4,7 +4,8 @@ import activeBurnlistManager from './activeBurnlistManager';
 import historicalDataManager from './historicalDataManager';
 import returnCalculator from './returnCalculator';
 import notificationManager from './notificationManager';
-import navCalculator from './navCalculator';
+import realTimeNavCalculator from './realTimeNavCalculator';
+import navEventEmitter from './navEventEmitter';
 import { logger } from '../utils/logger';
 
 class TwelveDataSyncManager {
@@ -147,53 +148,74 @@ class TwelveDataSyncManager {
       
       allPriceUpdates.forEach(priceData => {
         const affectedBurnlists = activeBurnlistManager.getBurnlistsForTicker(priceData.symbol);
-        affectedBurnlists.forEach(slug => {
-          if (!burnlistUpdates[slug]) {
-            burnlistUpdates[slug] = [];
+        
+        affectedBurnlists.forEach(burnlistSlug => {
+          if (!burnlistUpdates[burnlistSlug]) {
+            burnlistUpdates[burnlistSlug] = [];
           }
-          burnlistUpdates[slug].push(priceData);
+          burnlistUpdates[burnlistSlug].push(priceData);
         });
       });
-      
-      // Update returns for each burnlist with complete data
-      Object.entries(burnlistUpdates).forEach(([slug, priceUpdates]) => {
-        this.updateBurnlistReturns(slug, priceUpdates);
-      });
+
+      // Update each affected burnlist
+      for (const [burnlistSlug, updates] of Object.entries(burnlistUpdates)) {
+        try {
+          await this.updateBurnlistReturns(burnlistSlug, updates);
+          
+          // Trigger immediate NAV calculation for real-time updates
+          const watchlists = JSON.parse(localStorage.getItem('burnlist_watchlists') || '{}');
+          const watchlistKey = Object.keys(watchlists).find(key => watchlists[key].slug === burnlistSlug);
+          
+          if (watchlistKey && watchlists[watchlistKey].items) {
+            const items = watchlists[watchlistKey].items;
+            await realTimeNavCalculator.triggerImmediateCalculation(burnlistSlug, items, 'MAX');
+          }
+        } catch (error) {
+          logger.error(`❌ Error updating burnlist ${burnlistSlug}:`, error);
+        }
+      }
       
       // Create chart datapoints for each active burnlist
       activeBurnlists.forEach(slug => {
         const burnlist = activeBurnlistManager.getBurnlistData(slug);
         if (burnlist && burnlist.items) {
-          // NEW NAV CALCULATION: Use NAV calculator for average return
+          // SIMPLE NAV CALCULATION: Use simple logic for average return
           try {
-            const navData = navCalculator.calculateNAVPerformance(burnlist.items, 'MAX');
+            // Simple fallback: calculate average of individual ticker returns
+            let totalReturn = 0;
+            let validTickers = 0;
             
-            if (navData && navData.length > 0) {
-              const latestNav = navData[navData.length - 1];
-              const watchlistReturn = latestNav.returnPercent;
-              
-              // Save chart datapoint for this watchlist
-              if (watchlistReturn !== null) {
-                historicalDataManager.saveWatchlistDatapoint(slug, {
-                  timestamp: Date.now(),
-                  averageReturn: watchlistReturn,
-                  tickerCount: burnlist.items.length
-                });
+            burnlist.items.forEach(item => {
+              try {
+                // Get the buy price from the last element of historical data (oldest price = start date)
+                const buyPrice = item.historicalData && item.historicalData.length > 0 ? 
+                  item.historicalData[item.historicalData.length - 1].price : 0;
+                // Get current price from the first element of historical data (most recent price)
+                const currentPrice = item.currentPrice || (item.historicalData && item.historicalData.length > 0 ? 
+                  item.historicalData[0].price : 0); // First element = newest price
+                
+                if (buyPrice > 0 && currentPrice > 0) {
+                  const tickerReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
+                  totalReturn += tickerReturn;
+                  validTickers++;
+                }
+              } catch (error) {
+                logger.error(`Error calculating return for ${item.symbol}:`, error);
               }
-            } else {
-              // Fallback to old calculation
-              const watchlistReturn = returnCalculator.calculateWatchlistReturn(burnlist.items);
-              
-              if (watchlistReturn !== null) {
-                historicalDataManager.saveWatchlistDatapoint(slug, {
-                  timestamp: Date.now(),
-                  averageReturn: watchlistReturn,
-                  tickerCount: burnlist.items.length
-                });
-              }
+            });
+            
+            const watchlistReturn = validTickers > 0 ? totalReturn / validTickers : 0;
+            
+            // Save chart datapoint for this watchlist
+            if (watchlistReturn !== null) {
+              historicalDataManager.saveWatchlistDatapoint(slug, {
+                timestamp: Date.now(),
+                averageReturn: watchlistReturn,
+                tickerCount: burnlist.items.length
+              });
             }
           } catch (error) {
-            logger.error(`❌ Error in NEW NAV calculation for ${slug}:`, error);
+            logger.error(`❌ Error in simple NAV calculation for ${slug}:`, error);
             
             // Fallback to old calculation
             const watchlistReturn = returnCalculator.calculateWatchlistReturn(burnlist.items);
@@ -294,36 +316,40 @@ class TwelveDataSyncManager {
         const updatedBurnlist = Object.values(updatedWatchlists).find(w => w.slug === slug);
         
         if (updatedBurnlist && updatedBurnlist.items) {
-          // NEW NAV CALCULATION: Use NAV calculator for average return
+          // SIMPLE NAV CALCULATION: Use simple logic for average return
           try {
-            const navData = navCalculator.calculateNAVPerformance(updatedBurnlist.items, 'MAX');
+            // Simple fallback: calculate average of individual ticker returns
+            let totalReturn = 0;
+            let validTickers = 0;
             
-            if (navData && navData.length > 0) {
-              const latestNav = navData[navData.length - 1];
-              const watchlistReturn = latestNav.returnPercent;
-              
-              // Save chart datapoint for this watchlist
-              if (watchlistReturn !== null) {
-                historicalDataManager.saveWatchlistDatapoint(slug, {
-                  timestamp: Date.now(),
-                  averageReturn: watchlistReturn,
-                  tickerCount: updatedBurnlist.items.length
-                });
+            updatedBurnlist.items.forEach(item => {
+              try {
+                const buyPrice = item.buyPrice || 0;
+                const currentPrice = item.currentPrice || (item.historicalData && item.historicalData.length > 0 ? 
+                  item.historicalData[0].price : 0); // First element = newest price
+                
+                if (buyPrice > 0 && currentPrice > 0) {
+                  const tickerReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
+                  totalReturn += tickerReturn;
+                  validTickers++;
+                }
+              } catch (error) {
+                logger.error(`Error calculating return for ${item.symbol}:`, error);
               }
-            } else {
-              // Fallback to old calculation
-              const watchlistReturn = returnCalculator.calculateWatchlistReturn(updatedBurnlist.items);
-              
-              if (watchlistReturn !== null) {
-                historicalDataManager.saveWatchlistDatapoint(slug, {
-                  timestamp: Date.now(),
-                  averageReturn: watchlistReturn,
-                  tickerCount: updatedBurnlist.items.length
-                });
-              }
+            });
+            
+            const watchlistReturn = validTickers > 0 ? totalReturn / validTickers : 0;
+            
+            // Save chart datapoint for this watchlist
+            if (watchlistReturn !== null) {
+              historicalDataManager.saveWatchlistDatapoint(slug, {
+                timestamp: Date.now(),
+                averageReturn: watchlistReturn,
+                tickerCount: updatedBurnlist.items.length
+              });
             }
           } catch (error) {
-            logger.error(`❌ Error in NEW NAV calculation for ${slug}:`, error);
+            logger.error(`❌ Error in simple NAV calculation for ${slug}:`, error);
             
             // Fallback to old calculation
             const watchlistReturn = returnCalculator.calculateWatchlistReturn(updatedBurnlist.items);

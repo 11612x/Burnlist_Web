@@ -27,26 +27,10 @@ async function loadNasdaqSymbols() {
 // Load NYSE symbols from official JSON file
 async function loadNyseSymbols() {
   try {
-    const response = await fetch('/twelvedata-api-server/flat-ui__data-Wed Jul 30 2025.json');
-    if (!response.ok) {
-      console.warn('⚠️ Could not fetch NYSE symbols, using fallback');
-      return;
-    }
+    // Skip fetching non-existent file and go straight to fallback
+    console.log('📊 NYSE symbol loading disabled (file not found) - using fallback');
     
-    const data = await response.json();
-    
-    // Extract symbols from the JSON data
-    data.forEach(item => {
-      if (item['ACT Symbol'] && item['ACT Symbol'].trim()) {
-        NYSE_SYMBOLS.add(item['ACT Symbol'].trim());
-      }
-    });
-    
-    console.log(`📊 Loaded ${NYSE_SYMBOLS.size} NYSE symbols from official data`);
-  } catch (error) {
-    console.warn('⚠️ Error loading NYSE symbols:', error);
-    
-    // Fallback to curated list if JSON loading fails
+    // Fallback to curated list since the JSON file doesn't exist
     const nyseList = [
       'SPY', 'QQQ', 'IWM', 'VTI', 'VOO', 'VEA', 'VWO', 'BND', 'GLD', 'SLV', 'USO', 
       'TLT', 'TBT', 'TMF', 'TMV', 'UVXY', 'VXX', 'XLE', 'XLF', 'XLK', 'XLV', 'XLI', 
@@ -60,6 +44,8 @@ async function loadNyseSymbols() {
     
     nyseList.forEach(symbol => NYSE_SYMBOLS.add(symbol));
     console.log(`📊 Loaded ${NYSE_SYMBOLS.size} NYSE symbols from fallback list`);
+  } catch (error) {
+    console.warn('⚠️ Error loading NYSE symbols:', error);
   }
 }
 

@@ -17,6 +17,13 @@ const NavigationBar = () => {
     if (path === '/universes') {
       return location.pathname === '/universes' || location.pathname.startsWith('/universe/');
     }
+    if (path === '/market') {
+      return location.pathname === '/market';
+    }
+    if (path === '/screeners') {
+      return location.pathname === '/screeners' || location.pathname.startsWith('/screeners/');
+    }
+
     return location.pathname === path;
   };
 
@@ -45,6 +52,27 @@ const NavigationBar = () => {
       gap: '10px'
     }}>
       <CustomButton
+        onClick={() => navigate('/')}
+        style={getButtonStyle(isCurrentPage('/'))}
+      >
+        BURNPAGE
+      </CustomButton>
+      
+      <CustomButton
+        onClick={() => navigate('/market')}
+        style={getButtonStyle(isCurrentPage('/market'))}
+      >
+        MARKET
+      </CustomButton>
+      
+      <CustomButton
+        onClick={() => navigate('/screeners')}
+        style={getButtonStyle(isCurrentPage('/screeners'))}
+      >
+        SCREENERS
+      </CustomButton>
+      
+      <CustomButton
         onClick={() => navigate('/universes')}
         style={getButtonStyle(isCurrentPage('/universes'))}
       >
@@ -58,12 +86,7 @@ const NavigationBar = () => {
         JOURNAL
       </CustomButton>
       
-      <CustomButton
-        onClick={() => navigate('/')}
-        style={getButtonStyle(isCurrentPage('/'))}
-      >
-        BURNPAGE
-      </CustomButton>
+
     </div>
   );
 };

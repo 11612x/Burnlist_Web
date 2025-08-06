@@ -316,14 +316,14 @@ export class FetchManager {
           await new Promise(resolve => setTimeout(resolve, 3000));
         }
         
-        const finvizTimeframe = {
-          'D': 'd', 'W': 'w', 'M': 'm', 'Y': 'y', 'YTD': 'ytd', 'MAX': 'max'
-        }[timeframe] || 'd';
+        const twelvedataTimeframe = {
+          'D': '1day', 'W': '1week', 'M': '1month', 'Y': '1year', 'YTD': '1day', 'MAX': '1day'
+        }[timeframe] || '1min';
         
         // Increment request counter before making the request
         incrementGlobalRequestCounter();
         
-        const newTicker = await fetchQuote(item.symbol, finvizTimeframe); // Pass timeframe
+        const newTicker = await fetchQuote(item.symbol, twelvedataTimeframe); // Pass timeframe
         
         // Check for rate limit errors
         if (!newTicker && globalRequestCount >= 50) {
@@ -337,7 +337,7 @@ export class FetchManager {
           continue;
         }
 
-        // Get ALL historical data from Finviz
+        // Get ALL historical data from Twelve Data
         const newHistoricalData = newTicker.historicalData;
         
         if (!newHistoricalData || newHistoricalData.length === 0) {

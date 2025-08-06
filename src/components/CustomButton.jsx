@@ -1,7 +1,7 @@
 import React from 'react';
 import { useThemeColor } from '../ThemeContext';
 
-const CustomButton = ({ children, onClick, type = 'button', style = {}, disabled = false, mobile = false, ...props }) => {
+const CustomButton = ({ children, onClick, type = 'button', style = {}, disabled = false, mobile = false, loading, ...props }) => {
   const bg = useThemeColor(disabled ? '#444' : '#000');
   const fg = useThemeColor('#8CB9A2');
   const border = useThemeColor('#8CB9A2');

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Start All Servers Script
-# This script starts all three servers: burnlist frontend, twelve data API, and finviz proxy
+# This script starts the burnlist frontend and main API server
 
 echo "🚀 Starting all servers..."
 
@@ -41,9 +41,8 @@ wait_for_server() {
 
 # Kill any existing processes
 echo "🧹 Cleaning up existing processes..."
-pkill -f "node finviz-proxy-server.cjs" 2>/dev/null
+pkill -f "node server.js" 2>/dev/null
 pkill -f "npm run dev" 2>/dev/null
-pkill -f "node twelvedata-api-server.cjs" 2>/dev/null
 sleep 2
 
 # Check ports
@@ -51,31 +50,19 @@ echo "🔍 Checking ports..."
 check_port 3001 || exit 1
 check_port 5173 || exit 1
 check_port 5174 || exit 1
-check_port 3002 || exit 1
 
-# Start Finviz Proxy Server
-echo "🔑 Starting Finviz Elite Proxy Server..."
-node finviz-proxy-server.cjs &
-FINVIZ_PID=$!
-echo "   Finviz proxy PID: $FINVIZ_PID"
-
-# Start Twelve Data API Server
-echo "📊 Starting Twelve Data API Server..."
-node twelvedata-api-server.cjs &
-TWELVEDATA_PID=$!
-echo "   Twelve Data API PID: $TWELVEDATA_PID"
+# Start Main API Server (with all endpoints)
+echo "🔑 Starting Main API Server..."
+node server.js &
+API_PID=$!
+echo "   Main API PID: $API_PID"
 
 # Wait a moment for servers to start
 sleep 3
 
 # Check if servers started successfully
-if ! wait_for_server 3001 "Finviz Proxy"; then
-    echo "❌ Failed to start Finviz proxy server"
-    exit 1
-fi
-
-if ! wait_for_server 3002 "Twelve Data API"; then
-    echo "❌ Failed to start Twelve Data API server"
+if ! wait_for_server 3001 "Main API"; then
+    echo "❌ Failed to start Main API server"
     exit 1
 fi
 
@@ -100,14 +87,13 @@ echo "🎉 All servers started successfully!"
 echo ""
 echo "📋 Server Information:"
 echo "   🌐 Burnlist Frontend: http://localhost:5173 (or 5174)"
-echo "   📊 Twelve Data API:   http://localhost:3002"
-echo "   🔑 Finviz Proxy:      http://localhost:3001"
+echo "   🔑 Main API Server:   http://localhost:3001"
 echo ""
 echo "🔗 Quick Links:"
 echo "   • Burnlist App:       http://localhost:5173"
-echo "   • Twelve Data API:    http://localhost:3002/health"
-echo "   • Finviz Proxy:       http://localhost:3001/health"
-echo "   • Finviz Test:        http://localhost:3001/api/test-elite"
+echo "   • API Health Check:   http://localhost:3001/api/health"
+echo "   • Market Data:        http://localhost:3001/api/twelvedata-market-data?symbols=SPY&start_date=2024-12-31T22:00:00.000Z&interval=1day&outputsize=5"
+echo "   • Sector Data:        http://localhost:3001/api/finviz-sector"
 echo ""
 echo "🛑 To stop all servers, run: pkill -f 'node\|npm'"
 echo ""
@@ -116,9 +102,8 @@ echo ""
 cleanup() {
     echo ""
     echo "🛑 Stopping all servers..."
-    kill $FINVIZ_PID $TWELVEDATA_PID $BURNLIST_PID 2>/dev/null
-    pkill -f "node finviz-proxy-server.cjs" 2>/dev/null
-    pkill -f "node twelvedata-api-server.cjs" 2>/dev/null
+    kill $API_PID $BURNLIST_PID 2>/dev/null
+    pkill -f "node server.js" 2>/dev/null
     pkill -f "npm run dev" 2>/dev/null
     echo "✅ All servers stopped"
     exit 0
@@ -135,12 +120,8 @@ echo ""
 while true; do
     sleep 10
     # Check if any server died
-    if ! kill -0 $FINVIZ_PID 2>/dev/null; then
-        echo "❌ Finviz proxy server stopped unexpectedly"
-        cleanup
-    fi
-    if ! kill -0 $TWELVEDATA_PID 2>/dev/null; then
-        echo "❌ Twelve Data API server stopped unexpectedly"
+    if ! kill -0 $API_PID 2>/dev/null; then
+        echo "❌ Main API server stopped unexpectedly"
         cleanup
     fi
     if ! kill -0 $BURNLIST_PID 2>/dev/null; then

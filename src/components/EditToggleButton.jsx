@@ -13,7 +13,7 @@ const EditToggleButton = ({ editMode, setEditMode }) => {
         style={{
           background: 'transparent',
           color: CRT_GREEN,
-          border: `1px solid ${CRT_GREEN}`,
+          border: 'none',
           fontFamily: "'Courier New', monospace",
           textTransform: 'lowercase',
           fontWeight: 400,
@@ -22,9 +22,23 @@ const EditToggleButton = ({ editMode, setEditMode }) => {
           boxShadow: 'none',
           borderRadius: 2,
           fontSize: 15,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minWidth: '40px',
+          height: '40px',
+          padding: '8px 16px'
         }}
       >
-        {editMode ? 'done' : 'edit'}
+        <img 
+          src="/src/assets/edit.png" 
+          alt="EDIT" 
+          style={{ 
+            width: '20px', 
+            height: '20px',
+            filter: 'brightness(0) saturate(100%) invert(85%) sepia(15%) saturate(638%) hue-rotate(86deg) brightness(95%) contrast(87%)'
+          }} 
+        />
       </CustomButton>
     </div>
   );

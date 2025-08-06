@@ -7,8 +7,10 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { fetchManager } from '@data/twelvedataFetchManager';
 import NotificationBanner from '@components/NotificationBanner';
 import CustomButton from '@components/CustomButton';
+import NavigationBar from '@components/NavigationBar';
 import logo from '../assets/logo.png';
 import { logger } from '../utils/logger';
+import { storage } from '../utils/storage';
 import logoblack from '../assets/logoblack.png';
 import { useTheme, useThemeColor } from '../ThemeContext';
 import useNotification from '../hooks/useNotification';
@@ -51,8 +53,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
 
   // Fetch counter state
   const [fetchCount, setFetchCount] = useState(() => {
-    const stored = localStorage.getItem('burnlist_fetch_count');
-    return stored ? parseInt(stored, 10) : 0;
+    return storage.getFetchCount();
   });
 
   // Utility: Check if it's 9:29am ET (reset time)
@@ -66,18 +67,20 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
   useEffect(() => {
     const interval = setInterval(() => {
       if (isResetTimeNY()) {
-        setFetchCount(0);
-        localStorage.setItem('burnlist_fetch_count', '0');
+            setFetchCount(0);
+    storage.setFetchCount(0);
       }
     }, 60 * 1000); // check every minute
     return () => clearInterval(interval);
   }, []);
 
+
+
   // Helper to increment fetch count
   const incrementFetchCount = () => {
     setFetchCount(prev => {
       const next = prev + 1;
-      localStorage.setItem('burnlist_fetch_count', String(next));
+      storage.setFetchCount(next);
       return next;
     });
   };
@@ -146,12 +149,13 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
       slug,
       items: [],
       reason: '',
+      startDate: null,
       createdAt: new Date().toISOString()
     };
     const updated = { ...watchlists, [newList.id]: newList };
     setWatchlists(updated);
-    localStorage.setItem('burnlist_watchlists', JSON.stringify(updated));
-    setNotification('');
+    storage.setWatchlists(updated);
+    setNotification(`Created watchlist: ${name}`);
   };
 
   const handleDeleteWatchlist = (id) => {
@@ -165,7 +169,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
     
     const { [keyToDelete]: deleted, ...remaining } = watchlists;
     setWatchlists(remaining);
-    localStorage.setItem('burnlist_watchlists', JSON.stringify(remaining));
+    storage.setWatchlists(remaining);
     if (deleted) {
       logger.log('🗑️ Deleted watchlist:', deleted.name);
     } else {
@@ -186,7 +190,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
       if (updated[id]) {
         updated[id] = { ...updated[id], name: newName, slug: slugify(newName) };
       }
-      localStorage.setItem('burnlist_watchlists', JSON.stringify(updated));
+      storage.setWatchlists(updated);
       return updated;
     });
   }, [setWatchlists, watchlists]);
@@ -200,37 +204,28 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
       }
     };
     setWatchlists(updated);
-    localStorage.setItem('burnlist_watchlists', JSON.stringify(updated));
+    storage.setWatchlists(updated);
   }, [setWatchlists, watchlists]);
 
   // Export all localStorage data to JSON file
   const handleExportData = () => {
     try {
-      // Get ALL localStorage data
-      const allLocalStorageData = {};
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key) {
-          try {
-            // Try to parse as JSON first, fallback to string
-            const value = localStorage.getItem(key);
-            try {
-              allLocalStorageData[key] = JSON.parse(value);
-            } catch {
-              allLocalStorageData[key] = value;
-            }
-          } catch (error) {
-            logger.warn(`Could not export localStorage key: ${key}`, error);
-          }
-        }
-      }
+      // Get ALL storage data
+      const allStorageData = {
+        watchlists: storage.getWatchlists(),
+        universes: storage.getUniverses(),
+        screeners: storage.getScreeners(),
+        screenerSettings: storage.get(STORAGE_KEYS.SCREENER_SETTINGS, {}),
+        tradeJournal: storage.getTradeJournal(),
+        fetchCount: storage.getFetchCount()
+      };
       
       const exportData = {
-        localStorage: allLocalStorageData,
+        storage: allStorageData,
         exportInfo: {
           timestamp: new Date().toISOString(),
-          totalKeys: Object.keys(allLocalStorageData).length,
-          keys: Object.keys(allLocalStorageData)
+          totalKeys: Object.keys(allStorageData).length,
+          keys: Object.keys(allStorageData)
         }
       };
       
@@ -242,7 +237,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
       link.download = `burnlist_complete_backup_${new Date().toISOString().split('T')[0]}.json`;
       link.click();
       
-      setNotification(`✅ All localStorage data exported (${Object.keys(allLocalStorageData).length} keys)`, 'success');
+      setNotification(`✅ All storage data exported (${Object.keys(allStorageData).length} keys)`, 'success');
     } catch (error) {
       logger.error('Export error:', error);
       setNotification('❌ Export failed', 'error');
@@ -312,17 +307,17 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
 
           // Import watchlists
           setWatchlists(importedData.watchlists);
-          localStorage.setItem('burnlist_watchlists', JSON.stringify(importedData.watchlists));
+          storage.setWatchlists(importedData.watchlists);
 
           // Import fetch count if available
           if (importedData.fetchCount !== undefined) {
             setFetchCount(importedData.fetchCount);
-            localStorage.setItem('burnlist_fetch_count', String(importedData.fetchCount));
+            storage.setFetchCount(importedData.fetchCount);
           }
 
           // Import trade journal data if available
           if (importedData.tradeJournalTrades && Array.isArray(importedData.tradeJournalTrades)) {
-            localStorage.setItem('trade_journal_trades', JSON.stringify(importedData.tradeJournalTrades));
+            storage.setTradeJournal(importedData.tradeJournalTrades);
           }
 
           setNotification('✅ Legacy data imported successfully', 'success');
@@ -377,7 +372,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
       if (updated[id]) {
         updated[id] = { ...updated[id], name: newName, slug: slugify(newName) };
       }
-      localStorage.setItem('burnlist_watchlists', JSON.stringify(updated));
+      storage.setWatchlists(updated);
       return updated;
     });
     setEditingNames(prev => ({ ...prev, [id]: { ...prev[id], prev: newName } }));
@@ -471,8 +466,8 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
           <span style={{ color: green, fontWeight: 'bold', fontSize: 12 }}>{fetchCount}</span>
           <span 
             onClick={() => {
-              const data = JSON.parse(localStorage.getItem('burnlist_watchlists'));
-              logger.log('🧪 Current localStorage burnlist_watchlists:', data);
+              const data = storage.getWatchlists();
+              logger.log('🧪 Current storage watchlists:', data);
             }}
             style={{ cursor: 'pointer', color: green }}
           >
@@ -481,93 +476,7 @@ const HomePage = ({ watchlists = {}, setWatchlists }) => {
         </div>
       </div>
 
-      {/* Navigation Buttons */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: '10px 20px',
-        borderBottom: `1px solid ${CRT_GREEN}`,
-        background: 'rgba(0,0,0,0.3)',
-        gap: '10px',
-        marginBottom: '20px'
-      }}>
-        <CustomButton
-          onClick={() => navigate('/')}
-          style={{
-            background: location.pathname === '/' ? CRT_GREEN : 'transparent',
-            color: location.pathname === '/' ? '#000000' : CRT_GREEN,
-            border: `1px solid ${CRT_GREEN}`,
-            padding: '9px 18px',
-            fontFamily: "'Courier New', monospace",
-            fontSize: '12px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            minWidth: '80px',
-            textAlign: 'center'
-          }}
-        >
-          BURNPAGE
-        </CustomButton>
-        
-        <CustomButton
-                      onClick={() => navigate('/screeners')}
-            style={{
-              background: location.pathname === '/screeners' ? CRT_GREEN : 'transparent',
-              color: location.pathname === '/screeners' ? '#000000' : CRT_GREEN,
-            border: `1px solid ${CRT_GREEN}`,
-            padding: '9px 18px',
-            fontFamily: "'Courier New', monospace",
-            fontSize: '12px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            minWidth: '80px',
-            textAlign: 'center'
-          }}
-        >
-                      SCREENERS
-        </CustomButton>
-        
-        <CustomButton
-          onClick={() => navigate('/universes')}
-          style={{
-            background: location.pathname === '/universes' || location.pathname.startsWith('/universe/') ? CRT_GREEN : 'transparent',
-            color: location.pathname === '/universes' || location.pathname.startsWith('/universe/') ? '#000000' : CRT_GREEN,
-            border: `1px solid ${CRT_GREEN}`,
-            padding: '9px 18px',
-            fontFamily: "'Courier New', monospace",
-            fontSize: '12px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            minWidth: '80px',
-            textAlign: 'center'
-          }}
-        >
-          UNIVERSE
-        </CustomButton>
-        
-        <CustomButton
-          onClick={() => navigate('/journal')}
-          style={{
-            background: location.pathname === '/journal' ? CRT_GREEN : 'transparent',
-            color: location.pathname === '/journal' ? '#000000' : CRT_GREEN,
-            border: `1px solid ${CRT_GREEN}`,
-            padding: '9px 18px',
-            fontFamily: "'Courier New', monospace",
-            fontSize: '12px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            minWidth: '80px',
-            textAlign: 'center'
-          }}
-        >
-          JOURNAL
-        </CustomButton>
-      </div>
+      <NavigationBar />
 
       {/* Centralized Notification Banner */}
       {notification && (

@@ -3,9 +3,10 @@ import { useThemeColor } from '../ThemeContext';
 import TickerRow from "./TickerRow";
 import MobileTableWrapper from "./MobileTableWrapper";
 import { logger } from '../utils/logger';
-import navCalculator from '../data/navCalculator';
 
 const CRT_GREEN = 'rgb(140,185,162)';
+const CRT_GREEN_DARK = 'rgb(120,150,130)';
+const CRT_GREEN_LIGHT = 'rgb(180,220,180)';
 
 const TickerTable = ({
   items,
@@ -18,34 +19,29 @@ const TickerTable = ({
   handleDelete,
   handleRefreshPrice,
   selectedTimeframe = 'W', // Default to weekly if not provided
+  showInactiveBadges = false,
 }) => {
   const green = useThemeColor(CRT_GREEN);
   const black = useThemeColor('black');
+  const greenDark = useThemeColor(CRT_GREEN_DARK);
 
-  // NEW NAV CALCULATION: Calculate average return using NAV calculator
+  // NEW NAV CALCULATION: Calculate average return using simple logic
   const averageReturn = useMemo(() => {
     if (!Array.isArray(items) || items.length === 0) return 0;
     
     try {
-      // Calculate NAV performance for the current timeframe
-      const navData = navCalculator.calculateNAVPerformance(items, selectedTimeframe);
-      
-      if (navData && navData.length > 0) {
-        // Get the latest NAV value
-        const latestNav = navData[navData.length - 1];
-        logger.log(`🔍 [TICKER TABLE NAV DEBUG] Latest NAV return: ${latestNav.returnPercent}%`);
-        return latestNav.returnPercent;
-      }
-      
-      // Fallback: calculate simple average of individual ticker returns
+      // Simple fallback: calculate average of individual ticker returns
       let totalReturn = 0;
       let validTickers = 0;
       
       items.forEach(item => {
         try {
-          const buyPrice = navCalculator.calculateDynamicBuyPrice(item, selectedTimeframe);
+          // Get the buy price from the last element of historical data (oldest price = start date)
+          const buyPrice = item.historicalData && item.historicalData.length > 0 ? 
+            item.historicalData[item.historicalData.length - 1].price : 0;
+          // Get current price from the first element of historical data (most recent price)
           const currentPrice = item.currentPrice || (item.historicalData && item.historicalData.length > 0 ? 
-            item.historicalData[item.historicalData.length - 1].price : 0);
+            item.historicalData[0].price : 0); // First element = newest price
           
           if (buyPrice > 0 && currentPrice > 0) {
             const tickerReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
@@ -58,11 +54,11 @@ const TickerTable = ({
       });
       
       const average = validTickers > 0 ? totalReturn / validTickers : 0;
-      logger.log(`🔍 [TICKER TABLE NAV DEBUG] Fallback average return: ${average.toFixed(2)}%`);
+      logger.log(`🔍 [TICKER TABLE NAV DEBUG] Average return: ${average.toFixed(2)}%`);
       return average;
       
     } catch (error) {
-      logger.error('Error calculating NAV average return:', error);
+      logger.error('Error calculating average return:', error);
       return 0;
     }
   }, [items, selectedTimeframe]);
@@ -72,6 +68,19 @@ const TickerTable = ({
     if (!Array.isArray(items)) return [];
     return [...items].sort((a, b) => (a.symbol || '').localeCompare(b.symbol || ''));
   }, [items]);
+
+  // Check if ticker is inactive (no price update in over 4 hours)
+  const isTickerInactive = (ticker) => {
+    if (!ticker.lastPriceUpdate) return true;
+    
+    const lastUpdate = new Date(ticker.lastPriceUpdate);
+    const now = new Date();
+    
+    // Consider ticker inactive if no update in the last 4 hours (more lenient)
+    const fourHoursAgo = new Date(now.getTime() - (4 * 60 * 60 * 1000));
+    
+    return lastUpdate < fourHoursAgo;
+  };
 
   const handleSort = (key) => {
     logger.log(`🔄 Sorting by: ${key}`);
@@ -85,10 +94,13 @@ const TickerTable = ({
     return (
       <div style={{ 
         textAlign: "center", 
-        padding: 40, 
-        color: green, 
+        padding: 60, 
+        color: greenDark, 
         fontFamily: "'Courier New'", 
-        background: black 
+        background: 'rgba(0,0,0,0.3)',
+        borderRadius: '8px',
+        border: `1px solid ${green}`,
+        fontSize: '1.1rem'
       }}>
         No tickers in watchlist.
       </div>
@@ -99,101 +111,100 @@ const TickerTable = ({
     <MobileTableWrapper>
       <table style={{
         width: '100%',
-        borderCollapse: 'collapse',
-        fontSize: '14.5px'
+        borderCollapse: 'separate',
+        borderSpacing: 0,
+        fontSize: '14.5px',
+        background: 'rgba(0,0,0,0.2)',
+        borderRadius: '8px',
+        overflow: 'hidden'
       }}>
         <thead>
-          <tr>
+          <tr style={{
+            background: `linear-gradient(135deg, rgba(149,184,163,0.1) 0%, rgba(149,184,163,0.05) 100%)`,
+            borderBottom: `2px solid ${green}`
+          }}>
             <th style={{ 
-              padding: '12px 8px', 
-              textAlign: "left", 
-              borderBottom: `2px solid ${green}`, 
+              padding: '16px 12px', 
+              textAlign: "center", 
               color: green,
               fontWeight: 'bold',
               fontSize: '14.5px',
               userSelect: 'none',
               transition: 'background-color 0.2s',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              borderRight: `1px solid rgba(149,184,163,0.2)`,
+              width: editMode ? '16.66%' : '20%'
             }}>
               Symbol {renderSortArrow("symbol")}
             </th>
             <th style={{ 
-              padding: '12px 8px', 
-              textAlign: "left", 
-              borderBottom: `2px solid ${green}`, 
+              padding: '16px 12px', 
+              textAlign: "center", 
               color: green,
               fontWeight: 'bold',
               fontSize: '14.5px',
               userSelect: 'none',
               transition: 'background-color 0.2s',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              borderRight: `1px solid rgba(149,184,163,0.2)`,
+              width: editMode ? '16.66%' : '20%'
             }}>
               Buy Price
             </th>
             <th style={{ 
-              padding: '12px 8px', 
-              textAlign: "left", 
-              borderBottom: `2px solid ${green}`, 
+              padding: '16px 12px', 
+              textAlign: "center", 
               color: green,
               fontWeight: 'bold',
               fontSize: '14.5px',
               userSelect: 'none',
               transition: 'background-color 0.2s',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              borderRight: `1px solid rgba(149,184,163,0.2)`,
+              width: editMode ? '16.66%' : '20%'
             }}>
               Buy Date
             </th>
             <th style={{ 
-              padding: '12px 8px', 
-              textAlign: "left", 
-              borderBottom: `2px solid ${green}`, 
+              padding: '16px 12px', 
+              textAlign: "center", 
               color: green,
               fontWeight: 'bold',
               fontSize: '14.5px',
               userSelect: 'none',
               transition: 'background-color 0.2s',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              borderRight: `1px solid rgba(149,184,163,0.2)`,
+              width: editMode ? '16.66%' : '20%'
             }}>
               Current Price
             </th>
             <th style={{ 
-              padding: '12px 8px', 
-              textAlign: "left", 
-              borderBottom: `2px solid ${green}`, 
+              padding: '16px 12px', 
+              textAlign: "center", 
               color: green,
               fontWeight: 'bold',
               fontSize: '14.5px',
               userSelect: 'none',
               transition: 'background-color 0.2s',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              borderRight: `1px solid rgba(149,184,163,0.2)`,
+              width: editMode ? '16.66%' : '20%'
             }}>
               Change % {renderSortArrow("changePercent")}
             </th>
             {/* Show Actions column only if edit mode is enabled */}
             {editMode && <th style={{ 
-              padding: '8px 4px', 
-              textAlign: "left", 
               color: green, 
               borderBottom: `1px solid ${green}`, 
               fontFamily: 'Courier New', 
               background: black,
-              minWidth: '80px',
-              '@media (max-width: 480px)': {
-                padding: '4px 2px',
-                minWidth: '60px',
-              }
+              padding: '16px 12px',
+              textAlign: "center",
+              fontWeight: 'bold',
+              fontSize: '14.5px',
+              width: '16.66%'
             }}>Actions</th>}
-            <th style={{ 
-              textAlign: "left", 
-              color: green, 
-              borderBottom: `1px solid ${green}`, 
-              fontFamily: 'Courier New', 
-              background: black,
-              width: '20px',
-              '@media (max-width: 480px)': {
-                width: '10px',
-              }
-            }} />
           </tr>
         </thead>
         <tbody>
@@ -225,6 +236,7 @@ const TickerTable = ({
                 selectedTimeframe={selectedTimeframe}
                 changePercent={0} // Let TickerRow calculate its own percentage
                 lookedUpBuyPrice={0} // Let TickerRow calculate its own price
+                isInactive={showInactiveBadges ? isTickerInactive(item) : false}
               />
             );
           })}
