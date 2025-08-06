@@ -188,38 +188,7 @@ const WatchlistPage = ({ watchlists, setWatchlists }) => {
       
       // Use backend proxy for historical data
       const symbolString = symbols.join(',');
-      
-      // Ensure startDate is in the correct format for Twelve Data API (YYYY-MM-DD)
-      let formattedStartDate = startDate;
-      if (startDate) {
-        try {
-          const date = new Date(startDate);
-          if (!isNaN(date.getTime())) {
-            formattedStartDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
-          } else {
-            // If startDate is not a valid date, use 30 days ago as default
-            const defaultDate = new Date();
-            defaultDate.setDate(defaultDate.getDate() - 30);
-            formattedStartDate = defaultDate.toISOString().split('T')[0];
-          }
-        } catch (error) {
-          console.error('Error formatting startDate:', error);
-          // Use 30 days ago as fallback
-          const defaultDate = new Date();
-          defaultDate.setDate(defaultDate.getDate() - 30);
-          formattedStartDate = defaultDate.toISOString().split('T')[0];
-        }
-      } else {
-        // No startDate provided, use 30 days ago
-        const defaultDate = new Date();
-        defaultDate.setDate(defaultDate.getDate() - 30);
-        formattedStartDate = defaultDate.toISOString().split('T')[0];
-      }
-      
-      console.log(`🔍 Original startDate: ${startDate}`);
-      console.log(`🔍 Formatted startDate: ${formattedStartDate}`);
-      
-      const response = await fetch(`/api/twelvedata-historical?symbols=${symbolString}&interval=1day&outputsize=${tradingDays}&start_date=${formattedStartDate}`);
+      const response = await fetch(`/api/twelvedata-historical?symbols=${symbolString}&interval=1day&outputsize=${tradingDays}&start_date=${startDate}`);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
