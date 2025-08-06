@@ -18,10 +18,6 @@ import { logger } from '../utils/logger';
 // Import the simple NAV calculator
 import simpleNavCalculator from '../data/simpleNavCalculator';
 
-// Import icons
-import getIcon from '../assets/get.png';
-import editIcon from '../assets/edit.png';
-
 const CRT_GREEN = 'rgb(149,184,163)';
 const CRT_GREEN_DARK = 'rgb(120,150,130)';
 const CRT_GREEN_LIGHT = 'rgb(180,220,180)';
@@ -185,18 +181,6 @@ const WatchlistPage = ({ watchlists, setWatchlists }) => {
     try {
       setLoading(true);
       setNotification(`Fetching initial daily data for ${symbols.length} tickers...`, "info");
-      
-      // Debug: Check what symbols is
-      console.log('🔍 fetchInitialDailyData called with symbols:', symbols);
-      console.log('🔍 symbols type:', typeof symbols);
-      console.log('🔍 symbols is array:', Array.isArray(symbols));
-      console.log('🔍 symbols length:', symbols?.length);
-      
-      // Ensure symbols is an array
-      if (!Array.isArray(symbols)) {
-        console.error('❌ symbols is not an array:', symbols);
-        throw new Error('Symbols must be an array');
-      }
       
       // Calculate trading days from start date to now
       const tradingDays = calculateNYCTradingDays(startDate, new Date());
@@ -447,19 +431,6 @@ const WatchlistPage = ({ watchlists, setWatchlists }) => {
 
   // Handle adding new tickers with start date
   const handleAddTickers = async (symbols = bulkSymbols.split(',').map(s => s.trim()), startDate = watchlist.startDate) => {
-    console.log('🔍 handleAddTickers called with symbols:', symbols);
-    console.log('🔍 symbols type:', typeof symbols);
-    console.log('🔍 symbols is array:', Array.isArray(symbols));
-    console.log('🔍 bulkSymbols:', bulkSymbols);
-    console.log('🔍 bulkSymbols type:', typeof bulkSymbols);
-    
-    // Ensure bulkSymbols is a string before splitting
-    if (typeof bulkSymbols !== 'string') {
-      console.error('❌ bulkSymbols is not a string:', bulkSymbols);
-      setNotification('Error: Invalid input format', 'error');
-      return;
-    }
-    
     if (!watchlist || !symbols || symbols.length === 0) return;
     
     try {
@@ -773,7 +744,7 @@ const WatchlistPage = ({ watchlists, setWatchlists }) => {
               <span style={{ fontSize: '12px' }}>...</span>
             ) : (
               <img 
-                src={getIcon} 
+                src="/src/assets/get.png" 
                 alt="GET" 
                 style={{ 
                   width: '20px', 
