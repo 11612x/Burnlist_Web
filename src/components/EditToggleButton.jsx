@@ -1,6 +1,7 @@
 import React from 'react';
 import { useThemeColor } from '../ThemeContext';
 import CustomButton from './CustomButton';
+import editIcon from '../assets/edit.png';
 
 const CRT_GREEN = 'rgb(149,184,163)';
 
@@ -31,7 +32,7 @@ const EditToggleButton = ({ editMode, setEditMode }) => {
         }}
       >
         <img 
-          src="/src/assets/edit.png" 
+          src={editIcon} 
           alt="EDIT" 
           style={{ 
             width: '20px', 
